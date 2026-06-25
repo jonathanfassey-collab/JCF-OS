@@ -461,6 +461,22 @@ export default function App() {
       }
     }
     loadData();
+    // Rechargement automatique toutes les 30 secondes
+    const interval = setInterval(async () => {
+      try {
+        const [asgRows, madRows, cpRows, cssRows] = await Promise.all([
+          supaFetch("assignments", "GET", null, "order=date.asc"),
+          supaFetch("mads", "GET", null, "order=created_at.desc"),
+          supaFetch("cp_requests", "GET", null, "type=eq.cp&order=created_at.desc"),
+          supaFetch("cp_requests", "GET", null, "type=eq.css&order=created_at.desc"),
+        ]);
+        if (asgRows && Array.isArray(asgRows))  setAssignments(asgRows.map(rowToAsg));
+        if (madRows && Array.isArray(madRows))  setMads(madRows.map(rowToMad));
+        if (cpRows  && Array.isArray(cpRows))   setCpRequests(cpRows.map(rowToCp));
+        if (cssRows && Array.isArray(cssRows))  setCssRequests(cssRows.map(rowToCp));
+      } catch(e) {}
+    }, 30000);
+    return () => clearInterval(interval);
   }, []);
   const [rates, setRates]             = useState(INITIAL_RATES);
   // Donnees editables — etat React propagé partout

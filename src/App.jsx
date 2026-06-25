@@ -1,5 +1,44 @@
 import React from "react";
 import { useState, useMemo, useEffect } from "react";
+// ─── Supabase config ──────────────────────────────────────────────────────────
+const SUPA_URL = "https://hwjuqtrdjcowgcvmhfed.supabase.co";
+const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh3anVxdHJkamNvd2djdm1oZmVkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIzODY5NDAsImV4cCI6MjA5Nzk2Mjk0MH0.2_sbmMTkGAnvffLlAsoLW8ZTy1nOpeNeGQtCg73q_bI";
+
+async function supaFetch(table, method, body, filters) {
+  const url = SUPA_URL + "/rest/v1/" + table + (filters ? "?" + filters : "");
+  const headers = {
+    "apikey": SUPA_KEY,
+    "Authorization": "Bearer " + SUPA_KEY,
+    "Content-Type": "application/json",
+  };
+  if (method === "POST") headers["Prefer"] = "return=representation";
+  const res = await fetch(url, { method: method||"GET", headers, body: body ? JSON.stringify(body) : undefined });
+  if (!res.ok) { console.error("Supabase error:", res.status, await res.text()); return null; }
+  if (method === "DELETE" || method === "PATCH") return true;
+  const text = await res.text();
+  return text ? JSON.parse(text) : [];
+}
+
+function asgToRow(a) {
+  return { id:a.id, collaborator_id:a.collaboratorId, date:a.date, location_id:a.locationId, type_id:a.typeId, hours:a.hours||0, booking_type:a.bookingType||"day", period_cost:a.periodCost||0, hotel_nights:a.hotelNights||0, hotel_cost:a.hotelCost||0, repas_soirs:a.repasSoirs||0, repas_cost:a.repasCost||0, ouverture:a.ouverture||false, ouverture_cost:a.ouvertureCost||0, penalite:a.penalite||0 };
+}
+function rowToAsg(r) {
+  return { id:r.id, collaboratorId:r.collaborator_id, date:r.date, locationId:r.location_id, typeId:r.type_id, hours:Number(r.hours)||0, bookingType:r.booking_type||"day", periodCost:Number(r.period_cost)||0, hotelNights:Number(r.hotel_nights)||0, hotelCost:Number(r.hotel_cost)||0, repasSoirs:Number(r.repas_soirs)||0, repasCost:Number(r.repas_cost)||0, ouverture:r.ouverture||false, ouvertureCost:Number(r.ouverture_cost)||0, penalite:Number(r.penalite)||0 };
+}
+function madToRow(m) {
+  return { id:m.id, partner_id:m.partnerId, collaborator_id:m.collaboratorId, booking_type:m.bookingType, start_date:m.startDate, end_date:m.endDate, blocked_hours:m.blockedHours||0, extra_hours:m.extraHours||0, collab_cost:m.collabCost||0, hotel_nights:m.hotelNights||0, hotel_cost:m.hotelCost||0, repas_soirs:m.repasSoirs||0, repas_cost:m.repasCost||0, ouverture_cost:m.ouvertureCost||0, cost:m.cost||0, status:m.status||"confirmed", comment:m.comment||"" };
+}
+function rowToMad(r) {
+  return { id:r.id, partnerId:r.partner_id, collaboratorId:r.collaborator_id, bookingType:r.booking_type, startDate:r.start_date, endDate:r.end_date, blockedHours:Number(r.blocked_hours)||0, extraHours:Number(r.extra_hours)||0, collabCost:Number(r.collab_cost)||0, hotelNights:Number(r.hotel_nights)||0, hotelCost:Number(r.hotel_cost)||0, repasSoirs:Number(r.repas_soirs)||0, repasCost:Number(r.repas_cost)||0, ouvertureCost:Number(r.ouverture_cost)||0, cost:Number(r.cost)||0, status:r.status||"confirmed", comment:r.comment||"" };
+}
+function cpToRow(r) {
+  return { id:r.id, collaborator_id:r.collaboratorId, dates:r.dates, comment:r.comment||"", status:r.status, type:r.type||"cp" };
+}
+function rowToCp(r) {
+  return { id:r.id, collaboratorId:r.collaborator_id, dates:r.dates||[], comment:r.comment||"", status:r.status, type:r.type||"cp" };
+}
+
+
 
 // ─── Palette JCF officielle ──────────────────────────────────────────────────
 // Navy   : #1E2F4F   Or     : #D4AF37   Fond   : #F8F9FB

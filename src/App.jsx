@@ -1,44 +1,5 @@
 import React from "react";
 import { useState, useMemo, useEffect } from "react";
-// ─── Supabase config ──────────────────────────────────────────────────────────
-const SUPA_URL = "https://hwjuqtrdjcowgcvmhfed.supabase.co";
-const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh3anVxdHJkamNvd2djdm1oZmVkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIzODY5NDAsImV4cCI6MjA5Nzk2Mjk0MH0.2_sbmMTkGAnvffLlAsoLW8ZTy1nOpeNeGQtCg73q_bI";
-
-async function supaFetch(table, method, body, filters) {
-  const url = SUPA_URL + "/rest/v1/" + table + (filters ? "?" + filters : "");
-  const headers = {
-    "apikey": SUPA_KEY,
-    "Authorization": "Bearer " + SUPA_KEY,
-    "Content-Type": "application/json",
-  };
-  if (method === "POST") headers["Prefer"] = "return=representation";
-  const res = await fetch(url, { method: method||"GET", headers, body: body ? JSON.stringify(body) : undefined });
-  if (!res.ok) { console.error("Supabase error:", res.status, await res.text()); return null; }
-  if (method === "DELETE" || method === "PATCH") return true;
-  const text = await res.text();
-  return text ? JSON.parse(text) : [];
-}
-
-function asgToRow(a) {
-  return { id:a.id, collaborator_id:a.collaboratorId, date:a.date, location_id:a.locationId, type_id:a.typeId, hours:a.hours||0, booking_type:a.bookingType||"day", period_cost:a.periodCost||0, hotel_nights:a.hotelNights||0, hotel_cost:a.hotelCost||0, repas_soirs:a.repasSoirs||0, repas_cost:a.repasCost||0, ouverture:a.ouverture||false, ouverture_cost:a.ouvertureCost||0, penalite:a.penalite||0 };
-}
-function rowToAsg(r) {
-  return { id:r.id, collaboratorId:r.collaborator_id, date:r.date, locationId:r.location_id, typeId:r.type_id, hours:Number(r.hours)||0, bookingType:r.booking_type||"day", periodCost:Number(r.period_cost)||0, hotelNights:Number(r.hotel_nights)||0, hotelCost:Number(r.hotel_cost)||0, repasSoirs:Number(r.repas_soirs)||0, repasCost:Number(r.repas_cost)||0, ouverture:r.ouverture||false, ouvertureCost:Number(r.ouverture_cost)||0, penalite:Number(r.penalite)||0 };
-}
-function madToRow(m) {
-  return { id:m.id, partner_id:m.partnerId, collaborator_id:m.collaboratorId, booking_type:m.bookingType, start_date:m.startDate, end_date:m.endDate, blocked_hours:m.blockedHours||0, extra_hours:m.extraHours||0, collab_cost:m.collabCost||0, hotel_nights:m.hotelNights||0, hotel_cost:m.hotelCost||0, repas_soirs:m.repasSoirs||0, repas_cost:m.repasCost||0, ouverture_cost:m.ouvertureCost||0, cost:m.cost||0, status:m.status||"confirmed", comment:m.comment||"" };
-}
-function rowToMad(r) {
-  return { id:r.id, partnerId:r.partner_id, collaboratorId:r.collaborator_id, bookingType:r.booking_type, startDate:r.start_date, endDate:r.end_date, blockedHours:Number(r.blocked_hours)||0, extraHours:Number(r.extra_hours)||0, collabCost:Number(r.collab_cost)||0, hotelNights:Number(r.hotel_nights)||0, hotelCost:Number(r.hotel_cost)||0, repasSoirs:Number(r.repas_soirs)||0, repasCost:Number(r.repas_cost)||0, ouvertureCost:Number(r.ouverture_cost)||0, cost:Number(r.cost)||0, status:r.status||"confirmed", comment:r.comment||"" };
-}
-function cpToRow(r) {
-  return { id:r.id, collaborator_id:r.collaboratorId, dates:r.dates, comment:r.comment||"", status:r.status, type:r.type||"cp" };
-}
-function rowToCp(r) {
-  return { id:r.id, collaboratorId:r.collaborator_id, dates:r.dates||[], comment:r.comment||"", status:r.status, type:r.type||"cp" };
-}
-
-
 
 // ─── Palette JCF officielle ──────────────────────────────────────────────────
 // Navy   : #1E2F4F   Or     : #D4AF37   Fond   : #F8F9FB
@@ -310,9 +271,7 @@ function generateStoreUser(ville, locationId, index) {
   };
 }
 
-const getToday = () => new Date().toISOString().split("T")[0];
-// TODAY est recalculé dynamiquement à chaque utilisation
-Object.defineProperty(globalThis, "TODAY", { get: getToday, configurable: true });
+const TODAY = new Date().toISOString().split("T")[0];
 const WEEK_DAYS = [
   { date:"2026-06-09", label:"Lun 9"  }, { date:"2026-06-10", label:"Mar 10" },
   { date:"2026-06-11", label:"Mer 11" }, { date:"2026-06-12", label:"Jeu 12" },
@@ -443,7 +402,6 @@ export default function App() {
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Fonction centralisée de chargement
   const loadAllData = async (showLoading) => {
     if (showLoading) setLoading(true);
     try {
@@ -461,14 +419,13 @@ export default function App() {
     finally { if (showLoading) setLoading(false); }
   };
 
+  const refreshData = () => loadAllData(false);
+
   useEffect(() => {
     loadAllData(true);
-    // Rechargement auto toutes les 60 secondes
     const interval = setInterval(() => loadAllData(false), 60000);
     return () => clearInterval(interval);
   }, []);
-
-  const refreshData = () => loadAllData(false);
   const [rates, setRates]             = useState(INITIAL_RATES);
   // Donnees editables — etat React propagé partout
   const [dynCollaborators, setDynCollaborators] = useState(COLLABORATORS);
@@ -522,9 +479,7 @@ export default function App() {
   const addAssignment = async (a) => {
     const entry = { ...a, id: newId() };
     setAssignments(p => [...p, entry]);
-    try {
-      await supaFetch("assignments", "POST", asgToRow(entry));
-    } catch(e) { console.error("addAssignment error:", e); }
+    try { await supaFetch("assignments", "POST", asgToRow(entry)); } catch(e) {}
   };
   const updateAssignment = async (id, ch) => {
     setAssignments(p => p.map(a => a.id===id ? { ...a, ...ch } : a));
@@ -602,8 +557,8 @@ export default function App() {
 
   const props = { assignments, addAssignment, updateAssignment, deleteAssignment, rates, collabExtras, updateCollabExtra, partners, updatePartner, mads, addMad, updateMad, dynCollaborators, addCollaborator };
 
-  if (user.role === "admin")       return (<AdminSpace       user={user} onLogout={() => setUser(null)} {...props} updateRate={updateRate} cpRequests={cpRequests} validateCpRequest={validateCpRequest} refuseCpRequest={refuseCpRequest} cssRequests={cssRequests} validateCssRequest={validateCssRequest} refuseCssRequest={refuseCssRequest} onRefresh={refreshData} />);
-  if (user.role === "store")       return (<StoreSpace       user={user} onLogout={() => setUser(null)} {...props} onRefresh={refreshData} />);
+  if (user.role === "admin")       return (<AdminSpace       user={user} onLogout={() => setUser(null)} {...props} updateRate={updateRate} cpRequests={cpRequests} validateCpRequest={validateCpRequest} refuseCpRequest={refuseCpRequest} cssRequests={cssRequests} validateCssRequest={validateCssRequest} refuseCssRequest={refuseCssRequest} />);
+  if (user.role === "store")       return (<StoreSpace       user={user} onLogout={() => setUser(null)} {...props} />);
   if (user.role === "replacement") return (<ReplacementSpace user={user} onLogout={() => setUser(null)} {...props} addCpRequest={addCpRequest} cpRequests={cpRequests} addCssRequest={addCssRequest} cssRequests={cssRequests} />);
   return null;
 }
@@ -1136,7 +1091,7 @@ function LoginScreen({ onLogin, dynUsers }) {
 // ════════════════════════════════════════════════════════════
 // ESPACE ADMIN
 // ════════════════════════════════════════════════════════════
-function AdminSpace({ user, onLogout, assignments, addAssignment, updateAssignment, deleteAssignment, rates, updateRate, collabExtras, updateCollabExtra, partners, updatePartner, mads, addMad, updateMad, dynCollaborators, addCollaborator, cpRequests, validateCpRequest, refuseCpRequest, cssRequests, validateCssRequest, refuseCssRequest, onRefresh }) {
+function AdminSpace({ user, onLogout, assignments, addAssignment, updateAssignment, deleteAssignment, rates, updateRate, collabExtras, updateCollabExtra, partners, updatePartner, mads, addMad, updateMad, dynCollaborators, addCollaborator, cpRequests, validateCpRequest, refuseCpRequest, cssRequests, validateCssRequest, refuseCssRequest }) {
   const [tab, setTab]     = useState("dashboard");
   const [modal, setModal] = useState(null);
   const props = { assignments, addAssignment, updateAssignment, deleteAssignment, setModal, rates, collabExtras, updateCollabExtra, partners, updatePartner, mads, addMad, updateMad, dynCollaborators, addCollaborator };
@@ -1199,8 +1154,8 @@ function AdminSpace({ user, onLogout, assignments, addAssignment, updateAssignme
 function ReservationModal({ collab, locationId, assignments, onClose, onConfirm, rates }) {
   const [step,      setStep]      = useState("form");
   const [resType,   setResType]   = useState("day");
-  const [startDate, setStartDate] = useState(getToday());
-  const [monthStr,  setMonthStr]  = useState(getToday().slice(0,7));
+  const [startDate, setStartDate] = useState(TODAY);
+  const [monthStr,  setMonthStr]  = useState("2026-06");
   const [inclSat,   setInclSat]   = useState(false);
   const [extraH,    setExtraH]    = useState(0);
   const [hotelNights,  setHotelNights]  = useState(0);
@@ -1243,22 +1198,19 @@ function ReservationModal({ collab, locationId, assignments, onClose, onConfirm,
     if (conflictDates.length > 0 && !skipConfl) { setConflicts(conflictDates); return; }
     setConflicts([]); setStep("summary");
   };
-  const confirm = async () => {
-    // Insérer les assignments un par un pour éviter les conflits Supabase
-    for (let idx = 0; idx < datesToBook.length; idx++) {
-      const ds = datesToBook[idx];
-      await onConfirm({
-        collaboratorId:collab.id, date:ds, locationId, typeId:"work",
-        hours:hoursPerDay, bookingType:resType, blockedHours, extraHours:extraH,
-        periodCost:    idx===0 ? Math.round(collabCost) : 0,
-        hotelNights:   idx===0 ? hotelNights   : 0,
-        hotelCost:     idx===0 ? hotelCost     : 0,
-        repasSoirs:    idx===0 ? repasSoirs    : 0,
-        repasCost:     idx===0 ? repasCost     : 0,
-        ouverture:     idx===0 ? ouverture     : false,
-        ouvertureCost: idx===0 ? ouvertureCost : 0,
-      });
-    }
+  const confirm = () => {
+    datesToBook.forEach((ds, idx) => onConfirm({
+      collaboratorId:collab.id, date:ds, locationId, typeId:"work",
+      hours:hoursPerDay, bookingType:resType, blockedHours, extraHours:extraH,
+      // Cout collab ET frais sur le premier jour uniquement — evite la multiplication
+      periodCost:    idx===0 ? Math.round(collabCost) : 0,
+      hotelNights:   idx===0 ? hotelNights   : 0,
+      hotelCost:     idx===0 ? hotelCost     : 0,
+      repasSoirs:    idx===0 ? repasSoirs    : 0,
+      repasCost:     idx===0 ? repasCost     : 0,
+      ouverture:     idx===0 ? ouverture     : false,
+      ouvertureCost: idx===0 ? ouvertureCost : 0,
+    }));
     onClose();
   };
 
@@ -1540,7 +1492,7 @@ function ReservationModal({ collab, locationId, assignments, onClose, onConfirm,
 // CALENDRIER MENSUEL MAGASIN
 // ════════════════════════════════════════════════════════════
 function StoreCalendar({ myReservations, rates, onClickEntry }) {
-  const [calYear,  setCalYear]  = useState(new Date().getFullYear());
+  const [calYear,  setCalYear]  = useState(2026);
   const [calMonth, setCalMonth] = useState(5);
   const [filter,   setFilter]   = useState("all");
 
@@ -1756,9 +1708,9 @@ function ReservationDetail({ assignment, rates, onClose, onCancel, onCancelLate 
 // ════════════════════════════════════════════════════════════
 // ESPACE MAGASIN
 // ════════════════════════════════════════════════════════════
-function StoreSpace({ user, onLogout, assignments, addAssignment, deleteAssignment, rates, onRefresh }) {
+function StoreSpace({ user, onLogout, assignments, addAssignment, deleteAssignment, rates }) {
   const [tab,         setTab]    = useState("calendar");
-  const [selDate,     setSelDate]= useState(getToday());
+  const [selDate,     setSelDate]= useState(TODAY);
   const [resModal,    setResMod] = useState(null);
   const [detailEntry, setDetail] = useState(null);
 
@@ -1926,18 +1878,18 @@ function StoreSpace({ user, onLogout, assignments, addAssignment, deleteAssignme
 // ════════════════════════════════════════════════════════════
 // ESPACE REMPLACANT
 // ════════════════════════════════════════════════════════════
-function ReplacementSpace({ user, onLogout, assignments, addCpRequest, cpRequests, addCssRequest, cssRequests, onRefresh }) {
+function ReplacementSpace({ user, onLogout, assignments, addCpRequest, cpRequests, addCssRequest, cssRequests }) {
   const [tab,        setTab]       = useState("planning");
   // Planning : semaine + calendrier
-  const [weekStart,  setWeekStart] = useState((() => { const d = new Date(); const day = d.getDay(); const diff = d.getDate() - day + (day===0?-6:1); d.setDate(diff); return d.toISOString().split("T")[0]; })());
+  const [weekStart,  setWeekStart] = useState("2026-06-09");
   const [planView,   setPlanView]  = useState("week"); // "week" | "cal"
-  const [calYear,    setCalYear]   = useState(new Date().getFullYear());
+  const [calYear,    setCalYear]   = useState(2026);
   const [calMonth,   setCalMonth]  = useState(5);
   // Heures : navigation mois
-  const [hYear,      setHYear]     = useState(new Date().getFullYear());
+  const [hYear,      setHYear]     = useState(2026);
   const [hMonth,     setHMonth]    = useState(5);
   // Missions : navigation mois
-  const [mYear,      setMYear]     = useState(new Date().getFullYear());
+  const [mYear,      setMYear]     = useState(2026);
   const [mMonth,     setMMonth]    = useState(5);
 
   const collab = COLLABORATORS.find(c => c.id===user.collaboratorId);
@@ -2404,12 +2356,12 @@ function MissionGroupCard({ group, rates }) {
 }
 
 function PlanningView({ assignments, setModal }) {
-  const [selDate,   setSelDate]   = useState(getToday());
-  const [weekStart, setWeekStart] = useState((() => { const d = new Date(); const day = d.getDay(); const diff = d.getDate() - day + (day===0?-6:1); d.setDate(diff); return d.toISOString().split("T")[0]; })());
+  const [selDate,   setSelDate]   = useState(TODAY);
+  const [weekStart, setWeekStart] = useState("2026-06-09");
   const [viewMode,  setViewMode]  = useState("week"); // "week" | "cal" | "timeline"
-  const [calYear,   setCalYear]   = useState(new Date().getFullYear());
+  const [calYear,   setCalYear]   = useState(2026);
   const [calMonth,  setCalMonth]  = useState(5);
-  const [tlYear,    setTlYear]    = useState(new Date().getFullYear());
+  const [tlYear,    setTlYear]    = useState(2026);
   const [tlMonth,   setTlMonth]   = useState(5);
 
   const weekDates = Array.from({ length:7 }, (_, i) => {
@@ -2567,7 +2519,7 @@ function PlanningView({ assignments, setModal }) {
 }
 
 function MissionsView({ assignments, rates }) {
-  const [calYear,  setCalYear]  = useState(new Date().getFullYear());
+  const [calYear,  setCalYear]  = useState(2026);
   const [calMonth, setCalMonth] = useState(5);
   const monthStr = calYear+"-"+String(calMonth+1).padStart(2,"0");
   const prevMonth=()=>{ if(calMonth===0){setCalYear(y=>y-1);setCalMonth(11);}else setCalMonth(m=>m-1);};
@@ -2707,11 +2659,9 @@ function CollaboratorDetail({ c, assignments, onBack, setModal, collabExtras, up
   const pct     = Math.min(100, Math.round((planned/c.contract)*100));
   const [tab, setTab]             = useState("info"); // "info"|"planning"|"hours"|"partner"
   const [planView, setPlanView]   = useState("week"); // "week"|"cal"
-  const [planWeek, setPlanWeek]   = useState((() => { const d = new Date(); const day = d.getDay(); const diff = d.getDate() - day + (day===0?-6:1); d.setDate(diff); return d.toISOString().split("T")[0]; })());
-  const [hYear,    setHYear]      = useState(new Date().getFullYear());
-  const [hMonth,   setHMonth]     = useState(new Date().getMonth());
-  const [cY,       setCY]         = useState(new Date().getFullYear());
-  const [cM,       setCM]         = useState(new Date().getMonth());
+  const [planWeek, setPlanWeek]   = useState("2026-06-09");
+  const [hYear,    setHYear]      = useState(2026);
+  const [hMonth,   setHMonth]     = useState(5);
 
   // Disponibilite today
   const todayA  = myA.find(a => a.date===TODAY);
@@ -2952,6 +2902,7 @@ function CollaboratorDetail({ c, assignments, onBack, setModal, collabExtras, up
           {planView==="cal" && (
             <div>
               {(()=>{
+                const [cY,setCY]=useState(2026);const [cM,setCM]=useState(5);
                 const fD=new Date(cY,cM,1);const lD=new Date(cY,cM+1,0);
                 const sDow=(fD.getDay()+6)%7;const tc=Math.ceil((sDow+lD.getDate())/7)*7;
                 const cells=Array.from({length:tc},(_,i)=>{const n=i-sDow+1;if(n<1||n>lD.getDate())return null;const ds=cY+"-"+String(cM+1).padStart(2,"0")+"-"+String(n).padStart(2,"0");return{n,ds};});
@@ -2960,7 +2911,7 @@ function CollaboratorDetail({ c, assignments, onBack, setModal, collabExtras, up
                     <div style={{display:"flex",alignItems:"center",gap:8,padding:"0 8px 6px"}}>
                       <button onClick={()=>{if(cM===0){setCY(y=>y-1);setCM(11);}else setCM(m=>m-1);}} style={{...S.btn,padding:"5px 10px",background:"#F8F9FB",color:"#1E2F4F",fontSize:14}}>&#8249;</button>
                       <div style={{flex:1,textAlign:"center",fontWeight:700,fontSize:13,color:"#1E2F4F"}}>{MONTH_NAMES[cM]} {cY}</div>
-                      <button onClick={()=>{setCY(new Date().getFullYear());setCM(new Date().getMonth());}} style={{...S.btn,padding:"5px 8px",background:"#FFFBEB",color:"#1E2F4F",fontSize:10}}>Auj.</button>
+                      <button onClick={()=>{setCY(2026);setCM(5);}} style={{...S.btn,padding:"5px 8px",background:"#FFFBEB",color:"#1E2F4F",fontSize:10}}>Auj.</button>
                       <button onClick={()=>{if(cM===11){setCY(y=>y+1);setCM(0);}else setCM(m=>m+1);}} style={{...S.btn,padding:"5px 10px",background:"#F8F9FB",color:"#1E2F4F",fontSize:14}}>&#8250;</button>
                     </div>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",padding:"0 8px 2px",gap:2}}>
@@ -3087,8 +3038,8 @@ function CollaboratorDetail({ c, assignments, onBack, setModal, collabExtras, up
 
 function HoursView({ assignments, collabExtras }) {
   const [mode,      setMode]      = useState("week");  // "week" | "month"
-  const [weekStart, setWeekStart] = useState((() => { const d = new Date(); const day = d.getDay(); const diff = d.getDate() - day + (day===0?-6:1); d.setDate(diff); return d.toISOString().split("T")[0]; })());
-  const [calYear,   setCalYear]   = useState(new Date().getFullYear());
+  const [weekStart, setWeekStart] = useState("2026-06-09");
+  const [calYear,   setCalYear]   = useState(2026);
   const [calMonth,  setCalMonth]  = useState(5);
 
   const weekDates = Array.from({length:7},(_,i)=>{
@@ -3440,8 +3391,8 @@ function AssignmentModal({ modal, onClose, addAssignment, updateAssignment, dele
   const a      = modal.data && modal.data.assignment;
   const collab = modal.data && modal.data.collaborator;
   const [collabId, setCollabId] = useState(a ? a.collaboratorId : (collab ? collab.id : ""));
-  const [date,     setDate]     = useState(a ? a.date : (modal.data ? modal.data.date : getToday()) || getToday());
-  const [dateFin,  setDateFin]  = useState(a ? a.date : (modal.data ? modal.data.date : getToday()) || getToday());
+  const [date,     setDate]     = useState(a ? a.date : (modal.data ? modal.data.date : TODAY) || TODAY);
+  const [dateFin,  setDateFin]  = useState(a ? a.date : (modal.data ? modal.data.date : TODAY) || TODAY);
   const [periodeType, setPeriode] = useState("day");
   const [locId,    setLocId]    = useState(a ? a.locationId : "");
   const [typeId,   setTypeId]   = useState(a ? a.typeId : "work");
@@ -3472,15 +3423,15 @@ function AssignmentModal({ modal, onClose, addAssignment, updateAssignment, dele
   ) : 0;
   const estTotal = isWork ? est : 0; // est est déjà le total pour la période
 
-  const save = async () => {
+  const save = () => {
     if (!collabId) return;
     if (isEdit) {
       const entry = { collaboratorId:collabId, date, locationId:locId||typeId, typeId, hours: isWork?hours:0 };
       updateAssignment(a.id, entry);
     } else {
-      for (const ds of datesToCreate) {
-        await addAssignment({ collaboratorId:collabId, date:ds, locationId:locId||typeId, typeId, hours: isWork?hours:0 });
-      }
+      datesToCreate.forEach(ds => {
+        addAssignment({ collaboratorId:collabId, date:ds, locationId:locId||typeId, typeId, hours: isWork?hours:0 });
+      });
     }
     onClose();
   };
@@ -4497,8 +4448,8 @@ function CreateMadModal({ onClose, addMad, rates, partners, assignments }) {
   const [partnerId, setPartnerId] = useState("");
   const [collabId,  setCollabId]  = useState("");
   const [bookType,  setBookType]  = useState("day");
-  const [startDate, setStartDate] = useState(getToday());
-  const [monthStr,  setMonthStr]  = useState(getToday().slice(0,7));
+  const [startDate, setStartDate] = useState(TODAY);
+  const [monthStr,  setMonthStr]  = useState("2026-06");
   const [inclSat,   setInclSat]   = useState(false);
   const [extraH,    setExtraH]    = useState(0);
   const [comment,   setComment]   = useState("");
@@ -5593,8 +5544,8 @@ function CPRequestCard({ req, collab, onValidate, onRefuse }) {
 }
 
 function CPRequestModal({ collabId, cpHours, assignments, onClose, onSubmit, isCss }) {
-  const [dateDebut, setDateDebut] = useState(getToday());
-  const [dateFin,   setDateFin]   = useState(getToday());
+  const [dateDebut, setDateDebut] = useState(TODAY);
+  const [dateFin,   setDateFin]   = useState(TODAY);
   const [comment,   setComment]   = useState("");
   const s = calcCPSolde(collabId, cpHours, assignments);
   const dates = buildDateRange(dateDebut, dateFin);

@@ -478,6 +478,21 @@ export default function App() {
     }, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  const refreshData = async () => {
+    try {
+      const [asgRows, madRows, cpRows, cssRows] = await Promise.all([
+        supaFetch("assignments", "GET", null, "order=date.asc"),
+        supaFetch("mads", "GET", null, "order=created_at.desc"),
+        supaFetch("cp_requests", "GET", null, "type=eq.cp&order=created_at.desc"),
+        supaFetch("cp_requests", "GET", null, "type=eq.css&order=created_at.desc"),
+      ]);
+      if (asgRows && Array.isArray(asgRows))  setAssignments(asgRows.map(rowToAsg));
+      if (madRows && Array.isArray(madRows))  setMads(madRows.map(rowToMad));
+      if (cpRows  && Array.isArray(cpRows))   setCpRequests(cpRows.map(rowToCp));
+      if (cssRows && Array.isArray(cssRows))  setCssRequests(cssRows.map(rowToCp));
+    } catch(e) { console.error(e); }
+  };
   const [rates, setRates]             = useState(INITIAL_RATES);
   // Donnees editables — etat React propagé partout
   const [dynCollaborators, setDynCollaborators] = useState(COLLABORATORS);

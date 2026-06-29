@@ -311,7 +311,8 @@ function generateStoreUser(ville, locationId, index) {
 }
 
 const getToday = () => new Date().toISOString().split("T")[0];
-const TODAY = getToday();
+// TODAY est recalculé dynamiquement à chaque utilisation
+Object.defineProperty(globalThis, "TODAY", { get: getToday, configurable: true });
 const WEEK_DAYS = [
   { date:"2026-06-09", label:"Lun 9"  }, { date:"2026-06-10", label:"Mar 10" },
   { date:"2026-06-11", label:"Mer 11" }, { date:"2026-06-12", label:"Jeu 12" },
@@ -3439,8 +3440,8 @@ function AssignmentModal({ modal, onClose, addAssignment, updateAssignment, dele
   const a      = modal.data && modal.data.assignment;
   const collab = modal.data && modal.data.collaborator;
   const [collabId, setCollabId] = useState(a ? a.collaboratorId : (collab ? collab.id : ""));
-  const [date,     setDate]     = useState(a ? a.date : (modal.data ? modal.data.date : TODAY) || TODAY);
-  const [dateFin,  setDateFin]  = useState(a ? a.date : (modal.data ? modal.data.date : TODAY) || TODAY);
+  const [date,     setDate]     = useState(a ? a.date : (modal.data ? modal.data.date : getToday()) || getToday());
+  const [dateFin,  setDateFin]  = useState(a ? a.date : (modal.data ? modal.data.date : getToday()) || getToday());
   const [periodeType, setPeriode] = useState("day");
   const [locId,    setLocId]    = useState(a ? a.locationId : "");
   const [typeId,   setTypeId]   = useState(a ? a.typeId : "work");

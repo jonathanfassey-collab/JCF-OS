@@ -3469,15 +3469,15 @@ function AssignmentModal({ modal, onClose, addAssignment, updateAssignment, dele
   ) : 0;
   const estTotal = isWork ? est : 0; // est est déjà le total pour la période
 
-  const save = () => {
+  const save = async () => {
     if (!collabId) return;
     if (isEdit) {
       const entry = { collaboratorId:collabId, date, locationId:locId||typeId, typeId, hours: isWork?hours:0 };
       updateAssignment(a.id, entry);
     } else {
-      datesToCreate.forEach(ds => {
+      for (const ds of datesToCreate) {
         await addAssignment({ collaboratorId:collabId, date:ds, locationId:locId||typeId, typeId, hours: isWork?hours:0 });
-      });
+      }
     }
     onClose();
   };

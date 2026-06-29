@@ -610,7 +610,7 @@ export default function App() {
   const props = { assignments, addAssignment, updateAssignment, deleteAssignment, rates, collabExtras, updateCollabExtra, partners, updatePartner, mads, addMad, updateMad, dynCollaborators, addCollaborator };
 
   if (user.role === "admin")       return (<AdminSpace       user={user} onLogout={() => setUser(null)} {...props} updateRate={updateRate} cpRequests={cpRequests} validateCpRequest={validateCpRequest} refuseCpRequest={refuseCpRequest} cssRequests={cssRequests} validateCssRequest={validateCssRequest} refuseCssRequest={refuseCssRequest} />);
-  if (user.role === "store")       return (<StoreSpace       user={user} onLogout={() => setUser(null)} {...props} />);
+  if (user.role === "store")       return (<StoreSpace       user={user} onLogout={() => setUser(null)} {...props} onRefresh={refreshData} />);
   if (user.role === "replacement") return (<ReplacementSpace user={user} onLogout={() => setUser(null)} {...props} addCpRequest={addCpRequest} cpRequests={cpRequests} addCssRequest={addCssRequest} cssRequests={cssRequests} />);
   return null;
 }
@@ -1165,7 +1165,7 @@ function AdminSpace({ user, onLogout, assignments, addAssignment, updateAssignme
   return (
     <div style={S.app}>
       <style>{CSS}</style>
-      <TopBar user={user} onLogout={onLogout} section={tabs.find(t => t.id===tab)?.label || ""} />
+      <TopBar user={user} onLogout={onLogout} onRefresh={onRefresh} section={tabs.find(t => t.id===tab)?.label || ""} />
       <div style={S.body}>
         {tab==="dashboard"     && <AdminDashboard    {...props} />}
         {tab==="planning"      && <PlanningView      {...props} />}
@@ -1760,7 +1760,7 @@ function ReservationDetail({ assignment, rates, onClose, onCancel, onCancelLate 
 // ════════════════════════════════════════════════════════════
 // ESPACE MAGASIN
 // ════════════════════════════════════════════════════════════
-function StoreSpace({ user, onLogout, assignments, addAssignment, deleteAssignment, rates }) {
+function StoreSpace({ user, onLogout, assignments, addAssignment, deleteAssignment, rates, onRefresh }) {
   const [tab,         setTab]    = useState("calendar");
   const [selDate,     setSelDate]= useState(TODAY);
   const [resModal,    setResMod] = useState(null);
@@ -1808,7 +1808,7 @@ function StoreSpace({ user, onLogout, assignments, addAssignment, deleteAssignme
   return (
     <div style={S.app}>
       <style>{CSS}</style>
-      <TopBar user={user} onLogout={onLogout} section={(myLoc||{}).name||user.name} />
+      <TopBar user={user} onLogout={onLogout} onRefresh={onRefresh} section={(myLoc||{}).name||user.name} />
       <div style={S.body}>
         <div style={{ background:"#1E2F4F", padding:"14px 16px", color:"#ffffff", marginBottom:8 }}>
           <div style={{ fontSize:10, color:"rgba(255,255,255,.5)", textTransform:"uppercase", letterSpacing:"0.5px" }}>Espace partenaire</div>
@@ -1930,7 +1930,7 @@ function StoreSpace({ user, onLogout, assignments, addAssignment, deleteAssignme
 // ════════════════════════════════════════════════════════════
 // ESPACE REMPLACANT
 // ════════════════════════════════════════════════════════════
-function ReplacementSpace({ user, onLogout, assignments, addCpRequest, cpRequests, addCssRequest, cssRequests }) {
+function ReplacementSpace({ user, onLogout, assignments, addCpRequest, cpRequests, addCssRequest, cssRequests, onRefresh }) {
   const [tab,        setTab]       = useState("planning");
   // Planning : semaine + calendrier
   const [weekStart,  setWeekStart] = useState("2026-06-09");
@@ -1979,7 +1979,7 @@ function ReplacementSpace({ user, onLogout, assignments, addCpRequest, cpRequest
   return (
     <div style={S.app}>
       <style>{CSS}</style>
-      <TopBar user={user} onLogout={onLogout} section={collab ? collab.name : user.name} />
+      <TopBar user={user} onLogout={onLogout} onRefresh={onRefresh} section={collab ? collab.name : user.name} />
       <div style={S.body}>
         <div style={{ background:"#1E2F4F", padding:"14px 16px", color:"#ffffff", marginBottom:8 }}>
           <div style={{ display:"flex", alignItems:"center", gap:12 }}>
@@ -5446,7 +5446,7 @@ function Chapter7({ onDone }) {
 // ════════════════════════════════════════════════════════════
 // COMPOSANTS PARTAGES
 // ════════════════════════════════════════════════════════════
-function TopBar({ user, onLogout, section }) {
+function TopBar({ user, onLogout, section, onRefresh }) {
   return (
     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"12px 16px", background:"#1E2F4F", flexShrink:0 }}>
       <div style={{ display:"flex", alignItems:"center", gap:8 }}>

@@ -1241,19 +1241,22 @@ function ReservationModal({ collab, locationId, assignments, onClose, onConfirm,
     if (conflictDates.length > 0 && !skipConfl) { setConflicts(conflictDates); return; }
     setConflicts([]); setStep("summary");
   };
-  const confirm = () => {
-    datesToBook.forEach((ds, idx) => onConfirm({
-      collaboratorId:collab.id, date:ds, locationId, typeId:"work",
-      hours:hoursPerDay, bookingType:resType, blockedHours, extraHours:extraH,
-      // Cout collab ET frais sur le premier jour uniquement — evite la multiplication
-      periodCost:    idx===0 ? Math.round(collabCost) : 0,
-      hotelNights:   idx===0 ? hotelNights   : 0,
-      hotelCost:     idx===0 ? hotelCost     : 0,
-      repasSoirs:    idx===0 ? repasSoirs    : 0,
-      repasCost:     idx===0 ? repasCost     : 0,
-      ouverture:     idx===0 ? ouverture     : false,
-      ouvertureCost: idx===0 ? ouvertureCost : 0,
-    }));
+  const confirm = async () => {
+    // Insérer les assignments un par un pour éviter les conflits Supabase
+    for (let idx = 0; idx < datesToBook.length; idx++) {
+      const ds = datesToBook[idx];
+      await onConfirm({
+        collaboratorId:collab.id, date:ds, locationId, typeId:"work",
+        hours:hoursPerDay, bookingType:resType, blockedHours, extraHours:extraH,
+        periodCost:    idx===0 ? Math.round(collabCost) : 0,
+        hotelNights:   idx===0 ? hotelNights   : 0,
+        hotelCost:     idx===0 ? hotelCost     : 0,
+        repasSoirs:    idx===0 ? repasSoirs    : 0,
+        repasCost:     idx===0 ? repasCost     : 0,
+        ouverture:     idx===0 ? ouverture     : false,
+        ouvertureCost: idx===0 ? ouvertureCost : 0,
+      });
+    }
     onClose();
   };
 
@@ -3473,7 +3476,7 @@ function AssignmentModal({ modal, onClose, addAssignment, updateAssignment, dele
       updateAssignment(a.id, entry);
     } else {
       datesToCreate.forEach(ds => {
-        addAssignment({ collaboratorId:collabId, date:ds, locationId:locId||typeId, typeId, hours: isWork?hours:0 });
+        await addAssignment({ collaboratorId:collabId, date:ds, locationId:locId||typeId, typeId, hours: isWork?hours:0 });
       });
     }
     onClose();

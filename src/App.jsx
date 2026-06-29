@@ -600,7 +600,7 @@ export default function App() {
 
   const props = { assignments, addAssignment, updateAssignment, deleteAssignment, rates, collabExtras, updateCollabExtra, partners, updatePartner, mads, addMad, updateMad, dynCollaborators, addCollaborator };
 
-  if (user.role === "admin")       return (<AdminSpace       user={user} onLogout={() => setUser(null)} {...props} updateRate={updateRate} cpRequests={cpRequests} validateCpRequest={validateCpRequest} refuseCpRequest={refuseCpRequest} cssRequests={cssRequests} validateCssRequest={validateCssRequest} refuseCssRequest={refuseCssRequest} />);
+  if (user.role === "admin")       return (<AdminSpace       user={user} onLogout={() => setUser(null)} {...props} updateRate={updateRate} cpRequests={cpRequests} validateCpRequest={validateCpRequest} refuseCpRequest={refuseCpRequest} cssRequests={cssRequests} validateCssRequest={validateCssRequest} refuseCssRequest={refuseCssRequest} onRefresh={refreshData} />);
   if (user.role === "store")       return (<StoreSpace       user={user} onLogout={() => setUser(null)} {...props} onRefresh={refreshData} />);
   if (user.role === "replacement") return (<ReplacementSpace user={user} onLogout={() => setUser(null)} {...props} addCpRequest={addCpRequest} cpRequests={cpRequests} addCssRequest={addCssRequest} cssRequests={cssRequests} />);
   return null;
@@ -1134,7 +1134,7 @@ function LoginScreen({ onLogin, dynUsers }) {
 // ════════════════════════════════════════════════════════════
 // ESPACE ADMIN
 // ════════════════════════════════════════════════════════════
-function AdminSpace({ user, onLogout, assignments, addAssignment, updateAssignment, deleteAssignment, rates, updateRate, collabExtras, updateCollabExtra, partners, updatePartner, mads, addMad, updateMad, dynCollaborators, addCollaborator, cpRequests, validateCpRequest, refuseCpRequest, cssRequests, validateCssRequest, refuseCssRequest }) {
+function AdminSpace({ user, onLogout, assignments, addAssignment, updateAssignment, deleteAssignment, rates, updateRate, collabExtras, updateCollabExtra, partners, updatePartner, mads, addMad, updateMad, dynCollaborators, addCollaborator, cpRequests, validateCpRequest, refuseCpRequest, cssRequests, validateCssRequest, refuseCssRequest, onRefresh }) {
   const [tab, setTab]     = useState("dashboard");
   const [modal, setModal] = useState(null);
   const props = { assignments, addAssignment, updateAssignment, deleteAssignment, setModal, rates, collabExtras, updateCollabExtra, partners, updatePartner, mads, addMad, updateMad, dynCollaborators, addCollaborator };

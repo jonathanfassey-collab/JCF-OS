@@ -441,45 +441,9 @@ export default function App() {
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function loadData() {
-      try {
-        const [asgRows, madRows, cpRows, cssRows] = await Promise.all([
-          supaFetch("assignments", "GET", null, "order=date.asc"),
-          supaFetch("mads", "GET", null, "order=created_at.desc"),
-          supaFetch("cp_requests", "GET", null, "type=eq.cp&order=created_at.desc"),
-          supaFetch("cp_requests", "GET", null, "type=eq.css&order=created_at.desc"),
-        ]);
-        if (asgRows && Array.isArray(asgRows))  setAssignments(asgRows.map(rowToAsg));
-        if (madRows && Array.isArray(madRows))  setMads(madRows.map(rowToMad));
-        if (cpRows  && Array.isArray(cpRows))   setCpRequests(cpRows.map(rowToCp));
-        if (cssRows && Array.isArray(cssRows))  setCssRequests(cssRows.map(rowToCp));
-      } catch(e) {
-        console.error("Supabase load error:", e);
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadData();
-    // Rechargement automatique toutes les 30 secondes
-    const interval = setInterval(async () => {
-      try {
-        const [asgRows, madRows, cpRows, cssRows] = await Promise.all([
-          supaFetch("assignments", "GET", null, "order=date.asc"),
-          supaFetch("mads", "GET", null, "order=created_at.desc"),
-          supaFetch("cp_requests", "GET", null, "type=eq.cp&order=created_at.desc"),
-          supaFetch("cp_requests", "GET", null, "type=eq.css&order=created_at.desc"),
-        ]);
-        if (asgRows && Array.isArray(asgRows))  setAssignments(asgRows.map(rowToAsg));
-        if (madRows && Array.isArray(madRows))  setMads(madRows.map(rowToMad));
-        if (cpRows  && Array.isArray(cpRows))   setCpRequests(cpRows.map(rowToCp));
-        if (cssRows && Array.isArray(cssRows))  setCssRequests(cssRows.map(rowToCp));
-      } catch(e) {}
-    }, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const refreshData = async () => {
+  // Fonction centralisée de chargement
+  const loadAllData = async (showLoading) => {
+    if (showLoading) setLoading(true);
     try {
       const [asgRows, madRows, cpRows, cssRows] = await Promise.all([
         supaFetch("assignments", "GET", null, "order=date.asc"),
@@ -491,8 +455,18 @@ export default function App() {
       if (madRows && Array.isArray(madRows))  setMads(madRows.map(rowToMad));
       if (cpRows  && Array.isArray(cpRows))   setCpRequests(cpRows.map(rowToCp));
       if (cssRows && Array.isArray(cssRows))  setCssRequests(cssRows.map(rowToCp));
-    } catch(e) { console.error(e); }
+    } catch(e) { console.error("Supabase load error:", e); }
+    finally { if (showLoading) setLoading(false); }
   };
+
+  useEffect(() => {
+    loadAllData(true);
+    // Rechargement auto toutes les 60 secondes
+    const interval = setInterval(() => loadAllData(false), 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const refreshData = () => loadAllData(false);
   const [rates, setRates]             = useState(INITIAL_RATES);
   // Donnees editables — etat React propagé partout
   const [dynCollaborators, setDynCollaborators] = useState(COLLABORATORS);
@@ -546,7 +520,9 @@ export default function App() {
   const addAssignment = async (a) => {
     const entry = { ...a, id: newId() };
     setAssignments(p => [...p, entry]);
-    try { await supaFetch("assignments", "POST", asgToRow(entry)); } catch(e) {}
+    try {
+      await supaFetch("assignments", "POST", asgToRow(entry));
+    } catch(e) { console.error("addAssignment error:", e); }
   };
   const updateAssignment = async (id, ch) => {
     setAssignments(p => p.map(a => a.id===id ? { ...a, ...ch } : a));

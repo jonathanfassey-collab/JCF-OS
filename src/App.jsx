@@ -310,7 +310,8 @@ function generateStoreUser(ville, locationId, index) {
   };
 }
 
-const TODAY = new Date().toISOString().split("T")[0];
+const getToday = () => new Date().toISOString().split("T")[0];
+const TODAY = getToday();
 const WEEK_DAYS = [
   { date:"2026-06-09", label:"Lun 9"  }, { date:"2026-06-10", label:"Mar 10" },
   { date:"2026-06-11", label:"Mer 11" }, { date:"2026-06-12", label:"Jeu 12" },
@@ -1197,7 +1198,7 @@ function AdminSpace({ user, onLogout, assignments, addAssignment, updateAssignme
 function ReservationModal({ collab, locationId, assignments, onClose, onConfirm, rates }) {
   const [step,      setStep]      = useState("form");
   const [resType,   setResType]   = useState("day");
-  const [startDate, setStartDate] = useState(TODAY);
+  const [startDate, setStartDate] = useState(getToday());
   const [monthStr,  setMonthStr]  = useState("2026-06");
   const [inclSat,   setInclSat]   = useState(false);
   const [extraH,    setExtraH]    = useState(0);
@@ -1756,7 +1757,7 @@ function ReservationDetail({ assignment, rates, onClose, onCancel, onCancelLate 
 // ════════════════════════════════════════════════════════════
 function StoreSpace({ user, onLogout, assignments, addAssignment, deleteAssignment, rates, onRefresh }) {
   const [tab,         setTab]    = useState("calendar");
-  const [selDate,     setSelDate]= useState(TODAY);
+  const [selDate,     setSelDate]= useState(getToday());
   const [resModal,    setResMod] = useState(null);
   const [detailEntry, setDetail] = useState(null);
 
@@ -2402,7 +2403,7 @@ function MissionGroupCard({ group, rates }) {
 }
 
 function PlanningView({ assignments, setModal }) {
-  const [selDate,   setSelDate]   = useState(TODAY);
+  const [selDate,   setSelDate]   = useState(getToday());
   const [weekStart, setWeekStart] = useState("2026-06-09");
   const [viewMode,  setViewMode]  = useState("week"); // "week" | "cal" | "timeline"
   const [calYear,   setCalYear]   = useState(2026);
@@ -4494,7 +4495,7 @@ function CreateMadModal({ onClose, addMad, rates, partners, assignments }) {
   const [partnerId, setPartnerId] = useState("");
   const [collabId,  setCollabId]  = useState("");
   const [bookType,  setBookType]  = useState("day");
-  const [startDate, setStartDate] = useState(TODAY);
+  const [startDate, setStartDate] = useState(getToday());
   const [monthStr,  setMonthStr]  = useState("2026-06");
   const [inclSat,   setInclSat]   = useState(false);
   const [extraH,    setExtraH]    = useState(0);
@@ -5590,8 +5591,8 @@ function CPRequestCard({ req, collab, onValidate, onRefuse }) {
 }
 
 function CPRequestModal({ collabId, cpHours, assignments, onClose, onSubmit, isCss }) {
-  const [dateDebut, setDateDebut] = useState(TODAY);
-  const [dateFin,   setDateFin]   = useState(TODAY);
+  const [dateDebut, setDateDebut] = useState(getToday());
+  const [dateFin,   setDateFin]   = useState(getToday());
   const [comment,   setComment]   = useState("");
   const s = calcCPSolde(collabId, cpHours, assignments);
   const dates = buildDateRange(dateDebut, dateFin);

@@ -1,6 +1,44 @@
 import React from "react";
 import { useState, useMemo, useEffect } from "react";
 
+
+// ─── Supabase ────────────────────────────────────────────────────────────────
+const SUPA_URL = "https://hwjuqtrdjcowgcvmhfed.supabase.co";
+const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh3anVxdHJkamNvd2djdm1oZmVkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIzODY5NDAsImV4cCI6MjA5Nzk2Mjk0MH0.2_sbmMTkGAnvffLlAsoLW8ZTy1nOpeNeGQtCg73q_bI";
+
+async function supaFetch(table, method, body, filters) {
+  const url = SUPA_URL + "/rest/v1/" + table + (filters ? "?" + filters : "");
+  const headers = {
+    "apikey": SUPA_KEY,
+    "Authorization": "Bearer " + SUPA_KEY,
+    "Content-Type": "application/json",
+    "Prefer": "return=representation",
+  };
+  const res = await fetch(url, {
+    method: method || "GET",
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) { console.error("Supabase error", res.status, await res.text()); return null; }
+  if (method === "DELETE" || method === "PATCH") return true;
+  const text = await res.text();
+  return text ? JSON.parse(text) : [];
+}
+function asgToRow(a) {
+  return { id:a.id, collaborator_id:a.collaboratorId, date:a.date, location_id:a.locationId, type_id:a.typeId, hours:a.hours||0, booking_type:a.bookingType||"day", period_cost:a.periodCost||0, hotel_nights:a.hotelNights||0, hotel_cost:a.hotelCost||0, repas_soirs:a.repasSoirs||0, repas_cost:a.repasCost||0, ouverture:a.ouverture||false, ouverture_cost:a.ouvertureCost||0, penalite:a.penalite||0 };
+}
+function rowToAsg(r) {
+  return { id:r.id, collaboratorId:r.collaborator_id, date:r.date, locationId:r.location_id, typeId:r.type_id, hours:Number(r.hours)||0, bookingType:r.booking_type||"day", periodCost:Number(r.period_cost)||0, hotelNights:Number(r.hotel_nights)||0, hotelCost:Number(r.hotel_cost)||0, repasSoirs:Number(r.repas_soirs)||0, repasCost:Number(r.repas_cost)||0, ouverture:r.ouverture||false, ouvertureCost:Number(r.ouverture_cost)||0, penalite:Number(r.penalite)||0 };
+}
+function madToRow(m) {
+  return { id:m.id, partner_id:m.partnerId, collaborator_id:m.collaboratorId, booking_type:m.bookingType, start_date:m.startDate, end_date:m.endDate, blocked_hours:m.blockedHours||0, extra_hours:m.extraHours||0, collab_cost:m.collabCost||0, hotel_nights:m.hotelNights||0, hotel_cost:m.hotelCost||0, repas_soirs:m.repasSoirs||0, repas_cost:m.repasCost||0, ouverture_cost:m.ouvertureCost||0, cost:m.cost||0, status:m.status||"confirmed", comment:m.comment||"" };
+}
+function rowToMad(r) {
+  return { id:r.id, partnerId:r.partner_id, collaboratorId:r.collaborator_id, bookingType:r.booking_type, startDate:r.start_date, endDate:r.end_date, blockedHours:Number(r.blocked_hours)||0, extraHours:Number(r.extra_hours)||0, collabCost:Number(r.collab_cost)||0, hotelNights:Number(r.hotel_nights)||0, hotelCost:Number(r.hotel_cost)||0, repasSoirs:Number(r.repas_soirs)||0, repasCost:Number(r.repas_cost)||0, ouvertureCost:Number(r.ouverture_cost)||0, cost:Number(r.cost)||0, status:r.status||"confirmed", comment:r.comment||"" };
+}
+function cpToRow(r) { return { id:r.id, collaborator_id:r.collaboratorId, dates:r.dates, comment:r.comment||"", status:r.status, type:r.type||"cp" }; }
+function rowToCp(r) { return { id:r.id, collaboratorId:r.collaborator_id, dates:r.dates||[], comment:r.comment||"", status:r.status, type:r.type||"cp" }; }
+
 // ─── Palette JCF officielle ──────────────────────────────────────────────────
 // Navy   : #1E2F4F   Or     : #D4AF37   Fond   : #F8F9FB
 // Navy2  : #2D456B   OrL    : #E7C766   Carte  : #FFFFFF
@@ -557,9 +595,9 @@ export default function App() {
 
   const props = { assignments, addAssignment, updateAssignment, deleteAssignment, rates, collabExtras, updateCollabExtra, partners, updatePartner, mads, addMad, updateMad, dynCollaborators, addCollaborator };
 
-  if (user.role === "admin")       return (<AdminSpace       user={user} onLogout={() => setUser(null)} {...props} updateRate={updateRate} cpRequests={cpRequests} validateCpRequest={validateCpRequest} refuseCpRequest={refuseCpRequest} cssRequests={cssRequests} validateCssRequest={validateCssRequest} refuseCssRequest={refuseCssRequest} />);
-  if (user.role === "store")       return (<StoreSpace       user={user} onLogout={() => setUser(null)} {...props} />);
-  if (user.role === "replacement") return (<ReplacementSpace user={user} onLogout={() => setUser(null)} {...props} addCpRequest={addCpRequest} cpRequests={cpRequests} addCssRequest={addCssRequest} cssRequests={cssRequests} />);
+  if (user.role === "admin")       return (<AdminSpace       user={user} onLogout={() => setUser(null)} {...props} updateRate={updateRate} cpRequests={cpRequests} validateCpRequest={validateCpRequest} refuseCpRequest={refuseCpRequest} cssRequests={cssRequests} validateCssRequest={validateCssRequest} refuseCssRequest={refuseCssRequest} onRefresh={refreshData} />);
+  if (user.role === "store")       return (<StoreSpace       user={user} onLogout={() => setUser(null)} {...props} onRefresh={refreshData} />);
+  if (user.role === "replacement") return (<ReplacementSpace user={user} onLogout={() => setUser(null)} {...props} addCpRequest={addCpRequest} cpRequests={cpRequests} addCssRequest={addCssRequest} cssRequests={cssRequests} onRefresh={refreshData} />);
   return null;
 }
 
@@ -1091,7 +1129,7 @@ function LoginScreen({ onLogin, dynUsers }) {
 // ════════════════════════════════════════════════════════════
 // ESPACE ADMIN
 // ════════════════════════════════════════════════════════════
-function AdminSpace({ user, onLogout, assignments, addAssignment, updateAssignment, deleteAssignment, rates, updateRate, collabExtras, updateCollabExtra, partners, updatePartner, mads, addMad, updateMad, dynCollaborators, addCollaborator, cpRequests, validateCpRequest, refuseCpRequest, cssRequests, validateCssRequest, refuseCssRequest }) {
+function AdminSpace({ user, onLogout, onRefresh, assignments, addAssignment, updateAssignment, deleteAssignment, rates, updateRate, collabExtras, updateCollabExtra, partners, updatePartner, mads, addMad, updateMad, dynCollaborators, addCollaborator, cpRequests, validateCpRequest, refuseCpRequest, cssRequests, validateCssRequest, refuseCssRequest }) {
   const [tab, setTab]     = useState("dashboard");
   const [modal, setModal] = useState(null);
   const props = { assignments, addAssignment, updateAssignment, deleteAssignment, setModal, rates, collabExtras, updateCollabExtra, partners, updatePartner, mads, addMad, updateMad, dynCollaborators, addCollaborator };
@@ -1708,7 +1746,7 @@ function ReservationDetail({ assignment, rates, onClose, onCancel, onCancelLate 
 // ════════════════════════════════════════════════════════════
 // ESPACE MAGASIN
 // ════════════════════════════════════════════════════════════
-function StoreSpace({ user, onLogout, assignments, addAssignment, deleteAssignment, rates }) {
+function StoreSpace({ user, onLogout, onRefresh, assignments, addAssignment, deleteAssignment, rates }) {
   const [tab,         setTab]    = useState("calendar");
   const [selDate,     setSelDate]= useState(TODAY);
   const [resModal,    setResMod] = useState(null);
@@ -1878,7 +1916,7 @@ function StoreSpace({ user, onLogout, assignments, addAssignment, deleteAssignme
 // ════════════════════════════════════════════════════════════
 // ESPACE REMPLACANT
 // ════════════════════════════════════════════════════════════
-function ReplacementSpace({ user, onLogout, assignments, addCpRequest, cpRequests, addCssRequest, cssRequests }) {
+function ReplacementSpace({ user, onLogout, onRefresh, assignments, addCpRequest, cpRequests, addCssRequest, cssRequests }) {
   const [tab,        setTab]       = useState("planning");
   // Planning : semaine + calendrier
   const [weekStart,  setWeekStart] = useState("2026-06-09");

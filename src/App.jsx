@@ -4331,23 +4331,24 @@ function MadView({ mads, addMad, updateMad, deleteMad, assignments, rates, partn
   const [filter, setFilter] = useState("all");
   const [create, setCreate] = useState(false);
 
-  const filtered = mads.filter(m => {
+  const filtered = (mads||[]).filter(m => {
+    if (!m || !m.collaboratorId) return false;
     const matchStatus = filter==="all" || m.status===filter;
     const q = search.toLowerCase();
     const c = COLLABORATORS.find(x => x.id===m.collaboratorId);
-    const p = partners.find(x => x.id===m.partnerId);
+    const p = (partners||[]).find(x => x.id===m.partnerId);
     const matchSearch = !q || (c&&c.name.toLowerCase().includes(q)) || (p&&p.name.toLowerCase().includes(q));
     return matchStatus && matchSearch;
-  }).sort((a,b) => b.startDate.localeCompare(a.startDate));
+  }).sort((a,b) => (b.startDate||"").localeCompare(a.startDate||""));
 
   if (sel) {
     return (<MadDetail mad={sel} onBack={() => setSel(null)} updateMad={updateMad} deleteMad={deleteMad} assignments={assignments} rates={rates} partners={partners} collabExtras={collabExtras} />);
   }
 
   // KPIs
-  const confirmed = mads.filter(m => m.status==="confirmed");
-  const totalCA   = confirmed.reduce((s,m) => s+m.cost, 0);
-  const active    = confirmed.filter(m => m.startDate <= TODAY && m.endDate >= TODAY);
+  const confirmed = (mads||[]).filter(m => m && m.status==="confirmed");
+  const totalCA   = confirmed.reduce((s,m) => s+(m.cost||0), 0);
+  const active    = confirmed.filter(m => m.startDate && m.endDate && m.startDate <= TODAY && m.endDate >= TODAY);
 
   return (
     <div style={S.page}>
@@ -4382,8 +4383,8 @@ function MadView({ mads, addMad, updateMad, deleteMad, assignments, rates, partn
           const c   = COLLABORATORS.find(x => x.id===m.collaboratorId);
           const p   = partners.find(x => x.id===m.partnerId);
           const st  = MAD_STATUS[m.status] || MAD_STATUS.pending;
-          const dS  = new Date(m.startDate+"T12:00:00");
-          const dE  = new Date(m.endDate+"T12:00:00");
+          const dS  = new Date((m.startDate||TODAY)+"T12:00:00");
+          const dE  = new Date((m.endDate||TODAY)+"T12:00:00");
           const ct  = (COMMERCIAL_TYPES.find(x=>x.id===m.bookingType)||{}).label || m.bookingType;
           return (
             <div key={m.id} style={{ ...S.card, flexDirection:"column", alignItems:"stretch", gap:0, cursor:"pointer" }} onClick={() => setSel(m)}>

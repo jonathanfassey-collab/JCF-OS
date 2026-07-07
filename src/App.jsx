@@ -2737,6 +2737,8 @@ function CollaboratorDetail({ c, assignments, onBack, setModal, collabExtras, up
   const [planWeek, setPlanWeek]   = useState(getCurrentMonday());
   const [hYear,    setHYear]      = useState(new Date().getFullYear());
   const [hMonth,   setHMonth]     = useState(new Date().getMonth());
+  const [cY,       setCY]         = useState(new Date().getFullYear());
+  const [cM,       setCM]         = useState(new Date().getMonth());
 
   // Disponibilite today
   const todayA  = myA.find(a => a.date===TODAY);
@@ -2977,7 +2979,6 @@ function CollaboratorDetail({ c, assignments, onBack, setModal, collabExtras, up
           {planView==="cal" && (
             <div>
               {(()=>{
-                const [cY,setCY]=useState(new Date().getFullYear());const [cM,setCM]=useState(new Date().getMonth());
                 const fD=new Date(cY,cM,1);const lD=new Date(cY,cM+1,0);
                 const sDow=(fD.getDay()+6)%7;const tc=Math.ceil((sDow+lD.getDate())/7)*7;
                 const cells=Array.from({length:tc},(_,i)=>{const n=i-sDow+1;if(n<1||n>lD.getDate())return null;const ds=cY+"-"+String(cM+1).padStart(2,"0")+"-"+String(n).padStart(2,"0");return{n,ds};});
@@ -4387,7 +4388,7 @@ function MadView({ mads, addMad, updateMad, assignments, rates, partners, collab
                   <div style={{ fontSize:11, color:"#6B7280" }}>{p ? p.name : "—"} · {ct}</div>
                 </div>
                 <div style={{ textAlign:"right" }}>
-                  <div style={{ fontSize:13, fontWeight:700, color:"#D4AF37", fontVariantNumeric:"tabular-nums" }}>{fmtEur(m.cost)}</div>
+                  <div style={{ fontSize:13, fontWeight:700, color:"#D4AF37", fontVariantNumeric:"tabular-nums" }}>{fmtEur(m.cost || calcCommercialCost(m.collaboratorId, m.bookingType, m.extraHours||0, rates))}</div>
                   <div style={{ fontSize:9, color:"#9CA3AF" }}>HT estim.</div>
                 </div>
               </div>
@@ -4440,7 +4441,7 @@ function MadDetail({ mad, onBack, updateMad, rates, partners, collabExtras }) {
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div>
             <div style={{ fontSize:10, color:"rgba(255,255,255,.45)", textTransform:"uppercase", letterSpacing:"0.5px" }}>Tarif estimatif HT</div>
-            <div style={{ fontSize:26, fontWeight:800, color:"#D4AF37", fontVariantNumeric:"tabular-nums", marginTop:2 }}>{fmtEur(mad.cost)}</div>
+            <div style={{ fontSize:26, fontWeight:800, color:"#D4AF37", fontVariantNumeric:"tabular-nums", marginTop:2 }}>{fmtEur(mad.cost || calcCommercialCost(mad.collaboratorId, mad.bookingType, mad.extraHours||0, rates))}</div>
             {mad.hotelNights > 0 && (
               <div style={{ marginTop:8, fontSize:11, color:"rgba(255,255,255,.6)" }}>
                 Dont {mad.hotelNights} nuit{mad.hotelNights>1?"s":""} d'hotel · {fmtEur(mad.hotelCost||0)}

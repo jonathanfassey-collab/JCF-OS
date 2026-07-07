@@ -428,10 +428,16 @@ function calcCommercialCost(cId, bt, extra, rates) {
   if (bt==="day") base=r.day; if (bt==="week") base=r.week; if (bt==="fortnight") base=r.fortnight; if (bt==="month") base=r.month;
   return base + ((extra||0) * r.hourly);
 }
-function calcBlockedHours(c, bt, extra) {
+function calcBlockedHours(c, bt, extra, rates) {
   const x = extra || 0;
-  if (bt==="day") return 8+x; if (bt==="week") return (c.weeklyHours||35)+x;
-  if (bt==="fortnight") return ((c.weeklyHours||35)*2)+x; if (bt==="month") return (c.contract||0)+x;
+  // Priorité : rates > collab data > 35 par défaut
+  const r = rates && c ? (rates[c.id]||{}) : {};
+  const wh = (r.weeklyHours) || (c && c.weeklyHours) || 35;
+  const ct = (c && c.contract) || 0;
+  if (bt==="day") return Math.round(wh/5*10)/10+x;
+  if (bt==="week") return wh+x;
+  if (bt==="fortnight") return wh*2+x;
+  if (bt==="month") return ct+x;
   return x;
 }
 // Retourne le collaborateur avec ses surcharges editees (contrat, heures hebdo)
@@ -1268,7 +1274,7 @@ function ReservationModal({ collab, locationId, assignments, onClose, onConfirm,
   const availableDates = candidateDates.filter(ds => !conflictDates.includes(ds));
   const datesToBook    = skipConfl ? availableDates : candidateDates;
   const totalDays      = datesToBook.length;
-  const blockedHours   = calcBlockedHours(collab, resType, extraH);
+  const blockedHours   = calcBlockedHours(collab, resType, extraH, rates);
   const collabCost     = calcCommercialCost(collab.id, resType, extraH, rates);
   const hotelCost      = hotelNights * HOTEL_RATE;
   const repasCost      = repasSoirs * REPAS_RATE;
@@ -1349,7 +1355,7 @@ function ReservationModal({ collab, locationId, assignments, onClose, onConfirm,
             <FormLabel text="Duree commerciale" />
             <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:12 }}>
               {COMMERCIAL_TYPES.map(ct => {
-                const bh   = calcBlockedHours(collab, ct.id, 0);
+                const bh   = calcBlockedHours(collab, ct.id, 0, rates);
                 const cost = calcCommercialCost(collab.id, ct.id, 0, rates);
                 const sel  = resType === ct.id;
                 return (
@@ -2382,6 +2388,28 @@ function AdminDashboard({ assignments, setModal, rates }) {
         </div>
       )}
 
+      {(() => {
+        const annulations = assignments.filter(a => a.typeId==="annulation" && (a.penalite||0) > 0);
+        if (!annulations.length) return null;
+        return (
+          <div>
+            <SectionTitle title="Annulations tardives" sub="Pénalité 30%" />
+            <div style={S.cardList}>
+              {annulations.map((a,i) => {
+                const c = COLLABORATORS.find(x=>x.id===a.collaboratorId);
+                const loc = ALL_LOCATIONS.find(l=>l.id===a.locationId);
+                const d = new Date((a.date||TODAY)+"T12:00:00");
+                return (
+                  <div key={i} style={{ background:"#FEF2F2", borderRadius:10, padding:"10px 14px", fontSize:12, color:"#C0392B", borderLeft:"3px solid #C0392B" }}>
+                    ⚠️ <strong>{loc?loc.name:a.locationId}</strong> — Annulation tardive le {DAY_NAMES[d.getDay()]} {d.getDate()} {MONTH_NAMES[d.getMonth()]} · Pénalité : <strong>{fmtEur(a.penalite||0)}</strong>
+                    {c && <span style={{color:"#9CA3AF"}}> ({c.name})</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
       {alerts.length > 0 && (
         <div>
           <SectionTitle title="Alertes" sub="Heures sup" />
@@ -4576,7 +4604,7 @@ function CreateMadModal({ onClose, addMad, rates, partners, assignments }) {
     candidateDates.filter(ds => assignments.some(a=>a.collaboratorId===collabId&&a.date===ds&&isWorkType(a.typeId))),
     [candidateDates, assignments, collabId]);
 
-  const blockedHours = collab ? calcBlockedHours(collab, bookType, extraH) : 0;
+  const blockedHours = collab ? calcBlockedHours(collab, bookType, extraH, rates) : 0;
   const collabCost   = collab ? calcCommercialCost(collabId, bookType, extraH, rates) : 0;
   const hotelCost    = hotelNights * HOTEL_RATE;
   const repasCost    = repasSoirs * REPAS_RATE;
@@ -4683,7 +4711,7 @@ function CreateMadModal({ onClose, addMad, rates, partners, assignments }) {
             <FormLabel text="Duree commerciale" />
             <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:10 }}>
               {COMMERCIAL_TYPES.map(ct => {
-                const bh   = calcBlockedHours(collab, ct.id, 0);
+                const bh   = calcBlockedHours(collab, ct.id, 0, rates);
                 const cost = calcCommercialCost(collabId, ct.id, 0, rates);
                 const sel  = bookType===ct.id;
                 return (

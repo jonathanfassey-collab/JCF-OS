@@ -310,12 +310,24 @@ function generateStoreUser(ville, locationId, index) {
 }
 
 const TODAY = new Date().toISOString().split("T")[0];
-const WEEK_DAYS = [
-  { date:"2026-06-09", label:"Lun 9"  }, { date:"2026-06-10", label:"Mar 10" },
-  { date:"2026-06-11", label:"Mer 11" }, { date:"2026-06-12", label:"Jeu 12" },
-  { date:"2026-06-13", label:"Ven 13" }, { date:"2026-06-14", label:"Sam 14" },
-  { date:"2026-06-15", label:"Dim 15" },
-];
+function getWeekDays(mondayStr) {
+  const days = [];
+  const d = new Date(mondayStr + "T12:00:00");
+  for (let i=0;i<7;i++) {
+    const ds = d.toISOString().split("T")[0];
+    days.push({ date:ds, label: ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"][d.getDay()] + " " + d.getDate() });
+    d.setDate(d.getDate()+1);
+  }
+  return days;
+}
+function getCurrentMonday() {
+  const d = new Date();
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day===0 ? -6 : 1);
+  d.setDate(diff);
+  return d.toISOString().split("T")[0];
+}
+const WEEK_DAYS = getWeekDays(getCurrentMonday());
 const DAY_NAMES   = ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];
 const MONTH_NAMES = ["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"];
 
@@ -475,6 +487,30 @@ export default function App() {
     const entry = { ...m, id:"JCF-MAD-"+String(Date.now()).slice(-6) };
     setMads(p => [...p, entry]);
     try { await supaFetch("mads", "POST", madToRow(entry)); } catch(e) {}
+    // Créer les assignments dans le planning
+    if (entry.startDate && entry.endDate && entry.collaboratorId) {
+      const partner = INITIAL_PARTNERS.find(p => p.id === entry.partnerId);
+      const locMatch = [...STORES, ...MISSIONS].find(l => partner && l.name === partner.name);
+      const locId = locMatch ? locMatch.id : "work";
+      const dates = buildDateRange(entry.startDate, entry.endDate);
+      const hoursPerDay = (dates.length > 0 && entry.blockedHours) ? Math.round(entry.blockedHours / dates.length) : 8;
+      for (let idx = 0; idx < dates.length; idx++) {
+        await addAssignment({
+          collaboratorId: entry.collaboratorId,
+          date: dates[idx],
+          locationId: locId,
+          typeId: "work",
+          hours: hoursPerDay,
+          bookingType: entry.bookingType || "day",
+          periodCost: idx===0 ? (entry.collabCost||0) : 0,
+          hotelNights: idx===0 ? (entry.hotelNights||0) : 0,
+          hotelCost: idx===0 ? (entry.hotelCost||0) : 0,
+          repasSoirs: idx===0 ? (entry.repasSoirs||0) : 0,
+          repasCost: idx===0 ? (entry.repasCost||0) : 0,
+          ouvertureCost: 0,
+        });
+      }
+    }
   };
   const updateMad = async (id, ch) => {
     setMads(p => p.map(m => m.id===id ? { ...m, ...ch } : m));
@@ -1530,8 +1566,8 @@ function ReservationModal({ collab, locationId, assignments, onClose, onConfirm,
 // CALENDRIER MENSUEL MAGASIN
 // ════════════════════════════════════════════════════════════
 function StoreCalendar({ myReservations, rates, onClickEntry }) {
-  const [calYear,  setCalYear]  = useState(2026);
-  const [calMonth, setCalMonth] = useState(5);
+  const [calYear,  setCalYear]  = useState(new Date().getFullYear());
+  const [calMonth, setCalMonth] = useState(new Date().getMonth());
   const [filter,   setFilter]   = useState("all");
 
   const monthStr = calYear + "-" + String(calMonth+1).padStart(2,"0");
@@ -1919,16 +1955,16 @@ function StoreSpace({ user, onLogout, onRefresh, assignments, addAssignment, del
 function ReplacementSpace({ user, onLogout, onRefresh, assignments, addCpRequest, cpRequests, addCssRequest, cssRequests }) {
   const [tab,        setTab]       = useState("planning");
   // Planning : semaine + calendrier
-  const [weekStart,  setWeekStart] = useState("2026-06-09");
+  const [weekStart,  setWeekStart] = useState(getCurrentMonday());
   const [planView,   setPlanView]  = useState("week"); // "week" | "cal"
-  const [calYear,    setCalYear]   = useState(2026);
-  const [calMonth,   setCalMonth]  = useState(5);
+  const [calYear,    setCalYear]   = useState(new Date().getFullYear());
+  const [calMonth,   setCalMonth]  = useState(new Date().getMonth());
   // Heures : navigation mois
-  const [hYear,      setHYear]     = useState(2026);
-  const [hMonth,     setHMonth]    = useState(5);
+  const [hYear,      setHYear]     = useState(new Date().getFullYear());
+  const [hMonth,     setHMonth]    = useState(new Date().getMonth());
   // Missions : navigation mois
-  const [mYear,      setMYear]     = useState(2026);
-  const [mMonth,     setMMonth]    = useState(5);
+  const [mYear,      setMYear]     = useState(new Date().getFullYear());
+  const [mMonth,     setMMonth]    = useState(new Date().getMonth());
 
   const collab = COLLABORATORS.find(c => c.id===user.collaboratorId);
   const myA    = assignments.filter(a => a.collaboratorId===user.collaboratorId);
@@ -2047,7 +2083,7 @@ function ReplacementSpace({ user, onLogout, onRefresh, assignments, addCpRequest
                       <div style={{ display:"flex", alignItems:"center", gap:8, padding:"0 8px 6px" }}>
                         <button onClick={prevCal} style={{ ...S.btn,padding:"5px 10px",background:"#F8F9FB",color:"#1E2F4F",fontSize:14 }}>&#8249;</button>
                         <div style={{ flex:1,textAlign:"center",fontWeight:700,fontSize:13,color:"#1E2F4F" }}>{MONTH_NAMES[calMonth]} {calYear}</div>
-                        <button onClick={()=>{setCalYear(2026);setCalMonth(5);}} style={{ ...S.btn,padding:"5px 8px",background:"#FFFBEB",color:"#1E2F4F",fontSize:10 }}>Auj.</button>
+                        <button onClick={()=>{setCalYear(new Date().getFullYear());setCalMonth(new Date().getMonth());}} style={{ ...S.btn,padding:"5px 8px",background:"#FFFBEB",color:"#1E2F4F",fontSize:10 }}>Auj.</button>
                         <button onClick={nextCal} style={{ ...S.btn,padding:"5px 10px",background:"#F8F9FB",color:"#1E2F4F",fontSize:14 }}>&#8250;</button>
                       </div>
                       <div style={{ display:"grid",gridTemplateColumns:"repeat(7,1fr)",padding:"0 8px 2px",gap:2 }}>
@@ -2092,7 +2128,7 @@ function ReplacementSpace({ user, onLogout, onRefresh, assignments, addCpRequest
         {/* ── HEURES : navigation mois par mois ── */}
         {tab==="hours" && (
           <div style={{ padding:"8px 0" }}>
-            <MonthNav y={hYear} m={hMonth} setY={setHYear} setM={setHMonth} onToday={()=>{setHYear(2026);setHMonth(5);}} />
+            <MonthNav y={hYear} m={hMonth} setY={setHYear} setM={setHMonth} onToday={()=>{setHYear(new Date().getFullYear());setHMonth(new Date().getMonth());}} />
             {(()=>{
               const monthStr = hYear+"-"+String(hMonth+1).padStart(2,"0");
               const monthA   = myA.filter(a=>a.date.startsWith(monthStr));
@@ -2227,7 +2263,7 @@ function ReplacementSpace({ user, onLogout, onRefresh, assignments, addCpRequest
 
         {tab==="missions" && (
           <div style={{ padding:"8px 0" }}>
-            <MonthNav y={mYear} m={mMonth} setY={setMYear} setM={setMMonth} onToday={()=>{setMYear(2026);setMMonth(5);}} />
+            <MonthNav y={mYear} m={mMonth} setY={setMYear} setM={setMMonth} onToday={()=>{setMYear(new Date().getFullYear());setMMonth(new Date().getMonth());}} />
             {(()=>{
               const monthStr   = mYear+"-"+String(mMonth+1).padStart(2,"0");
               const monthMiss  = myA.filter(a=>a.date.startsWith(monthStr)&&isMission(a.locationId)&&isWorkType(a.typeId));
@@ -2289,7 +2325,8 @@ function AdminDashboard({ assignments, setModal, rates }) {
   const noA    = COLLABORATORS.filter(c => !todayA.find(a => a.collaboratorId===c.id));
   const entToday = [...new Set(active.filter(a => isMission(a.locationId)).map(a => a.locationId))];
   const caToday  = active.reduce((s,a) => s+estCollab(a.collaboratorId,a.hours,rates), 0);
-  const caWeek   = assignments.filter(a => WEEK_DAYS.some(d => d.date===a.date) && isWorkType(a.typeId)).reduce((s,a) => s+estCollab(a.collaboratorId,a.hours,rates), 0);
+  const _mon = getCurrentMonday(); const _sun = (() => { const d=new Date(_mon+"T12:00:00"); d.setDate(d.getDate()+6); return d.toISOString().split("T")[0]; })();
+  const caWeek   = assignments.filter(a => a.date>=_mon && a.date<=_sun && isWorkType(a.typeId)).reduce((s,a) => s+estCollab(a.collaboratorId,a.hours,rates), 0);
   const mGroups  = groupMissions(todayA);
   const alerts   = COLLABORATORS.map(c => { const ph=calcHours(assignments.filter(a=>a.collaboratorId===c.id)); return ph>c.contract?{name:c.name,over:ph-c.contract}:null; }).filter(Boolean);
 
@@ -2307,7 +2344,7 @@ function AdminDashboard({ assignments, setModal, rates }) {
         <CaCard label="CA semaine"     value={caWeek}  dark />
       </div>
 
-      <SectionTitle title="Aujourd'hui" sub="Mar 10 juin 2026" />
+      <SectionTitle title="Aujourd'hui" sub={(() => { const d=new Date(); return ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"][d.getDay()]+" "+d.getDate()+" "+["Janvier","Fevrier","Mars","Avril","Mai","Juin","Juillet","Aout","Septembre","Octobre","Novembre","Decembre"][d.getMonth()]+" "+d.getFullYear(); })()} />
       <div style={S.cardList}>
         {COLLABORATORS.map(c => {
           const a = todayA.find(x => x.collaboratorId===c.id);
@@ -2395,12 +2432,12 @@ function MissionGroupCard({ group, rates }) {
 
 function PlanningView({ assignments, setModal }) {
   const [selDate,   setSelDate]   = useState(TODAY);
-  const [weekStart, setWeekStart] = useState("2026-06-09");
+  const [weekStart, setWeekStart] = useState(getCurrentMonday());
   const [viewMode,  setViewMode]  = useState("week"); // "week" | "cal" | "timeline"
-  const [calYear,   setCalYear]   = useState(2026);
-  const [calMonth,  setCalMonth]  = useState(5);
-  const [tlYear,    setTlYear]    = useState(2026);
-  const [tlMonth,   setTlMonth]   = useState(5);
+  const [calYear,   setCalYear]   = useState(new Date().getFullYear());
+  const [calMonth,  setCalMonth]  = useState(new Date().getMonth());
+  const [tlYear,    setTlYear]    = useState(new Date().getFullYear());
+  const [tlMonth,   setTlMonth]   = useState(new Date().getMonth());
 
   const weekDates = Array.from({ length:7 }, (_, i) => {
     const d = new Date(weekStart+"T12:00:00"); d.setDate(d.getDate()+i); return d.toISOString().split("T")[0];
@@ -2497,7 +2534,7 @@ function PlanningView({ assignments, setModal }) {
           <div style={{ display:"flex", alignItems:"center", gap:8, padding:"4px 16px 6px" }}>
             <button onClick={prevCal} style={{ ...S.btn, padding:"5px 12px", background:"#F8F9FB", color:"#1E2F4F", fontSize:16 }}>&#8249;</button>
             <div style={{ flex:1, textAlign:"center", fontWeight:700, fontSize:14, color:"#1E2F4F" }}>{MONTH_NAMES[calMonth]} {calYear}</div>
-            <button onClick={()=>{setCalYear(2026);setCalMonth(5);}} style={{ ...S.btn, padding:"5px 10px", background:"#FFFBEB", color:"#1E2F4F", fontSize:11 }}>Auj.</button>
+            <button onClick={()=>{setCalYear(new Date().getFullYear());setCalMonth(new Date().getMonth());}} style={{ ...S.btn, padding:"5px 10px", background:"#FFFBEB", color:"#1E2F4F", fontSize:11 }}>Auj.</button>
             <button onClick={nextCal} style={{ ...S.btn, padding:"5px 12px", background:"#F8F9FB", color:"#1E2F4F", fontSize:16 }}>&#8250;</button>
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", padding:"0 8px 2px", gap:2 }}>
@@ -2547,7 +2584,7 @@ function PlanningView({ assignments, setModal }) {
           year={tlYear} month={tlMonth}
           onPrev={()=>{ if(tlMonth===0){setTlYear(y=>y-1);setTlMonth(11);}else setTlMonth(m=>m-1); }}
           onNext={()=>{ if(tlMonth===11){setTlYear(y=>y+1);setTlMonth(0);}else setTlMonth(m=>m+1); }}
-          onToday={()=>{ setTlYear(2026);setTlMonth(5); }}
+          onToday={()=>{ setTlYear(new Date().getFullYear());setTlMonth(new Date().getMonth()); }}
           onCellClick={(cId,ds)=>setModal({type:"new",data:{collaborator:COLLABORATORS.find(c=>c.id===cId),date:ds}})}
           onBlockClick={(a)=>setModal({type:"edit",data:{assignment:a,collaborator:COLLABORATORS.find(c=>c.id===a.collaboratorId),date:a.date}})}
         />
@@ -2557,8 +2594,8 @@ function PlanningView({ assignments, setModal }) {
 }
 
 function MissionsView({ assignments, rates }) {
-  const [calYear,  setCalYear]  = useState(2026);
-  const [calMonth, setCalMonth] = useState(5);
+  const [calYear,  setCalYear]  = useState(new Date().getFullYear());
+  const [calMonth, setCalMonth] = useState(new Date().getMonth());
   const monthStr = calYear+"-"+String(calMonth+1).padStart(2,"0");
   const prevMonth=()=>{ if(calMonth===0){setCalYear(y=>y-1);setCalMonth(11);}else setCalMonth(m=>m-1);};
   const nextMonth=()=>{ if(calMonth===11){setCalYear(y=>y+1);setCalMonth(0);}else setCalMonth(m=>m+1);};
@@ -2577,7 +2614,7 @@ function MissionsView({ assignments, rates }) {
       <div style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 16px 4px" }}>
         <button onClick={prevMonth} style={{ ...S.btn, padding:"5px 12px", background:"#F8F9FB", color:"#1E2F4F", fontSize:16 }}>&#8249;</button>
         <div style={{ flex:1, textAlign:"center", fontWeight:700, fontSize:14, color:"#1E2F4F" }}>{MONTH_NAMES[calMonth]} {calYear}</div>
-        <button onClick={()=>{setCalYear(2026);setCalMonth(5);}} style={{ ...S.btn, padding:"5px 10px", background:"#FFFBEB", color:"#1E2F4F", fontSize:11 }}>Auj.</button>
+        <button onClick={()=>{setCalYear(new Date().getFullYear());setCalMonth(new Date().getMonth());}} style={{ ...S.btn, padding:"5px 10px", background:"#FFFBEB", color:"#1E2F4F", fontSize:11 }}>Auj.</button>
         <button onClick={nextMonth} style={{ ...S.btn, padding:"5px 12px", background:"#F8F9FB", color:"#1E2F4F", fontSize:16 }}>&#8250;</button>
       </div>
 
@@ -2697,9 +2734,9 @@ function CollaboratorDetail({ c, assignments, onBack, setModal, collabExtras, up
   const pct     = Math.min(100, Math.round((planned/c.contract)*100));
   const [tab, setTab]             = useState("info"); // "info"|"planning"|"hours"|"partner"
   const [planView, setPlanView]   = useState("week"); // "week"|"cal"
-  const [planWeek, setPlanWeek]   = useState("2026-06-09");
-  const [hYear,    setHYear]      = useState(2026);
-  const [hMonth,   setHMonth]     = useState(5);
+  const [planWeek, setPlanWeek]   = useState(getCurrentMonday());
+  const [hYear,    setHYear]      = useState(new Date().getFullYear());
+  const [hMonth,   setHMonth]     = useState(new Date().getMonth());
 
   // Disponibilite today
   const todayA  = myA.find(a => a.date===TODAY);
@@ -2940,7 +2977,7 @@ function CollaboratorDetail({ c, assignments, onBack, setModal, collabExtras, up
           {planView==="cal" && (
             <div>
               {(()=>{
-                const [cY,setCY]=useState(2026);const [cM,setCM]=useState(5);
+                const [cY,setCY]=useState(new Date().getFullYear());const [cM,setCM]=useState(new Date().getMonth());
                 const fD=new Date(cY,cM,1);const lD=new Date(cY,cM+1,0);
                 const sDow=(fD.getDay()+6)%7;const tc=Math.ceil((sDow+lD.getDate())/7)*7;
                 const cells=Array.from({length:tc},(_,i)=>{const n=i-sDow+1;if(n<1||n>lD.getDate())return null;const ds=cY+"-"+String(cM+1).padStart(2,"0")+"-"+String(n).padStart(2,"0");return{n,ds};});
@@ -2949,7 +2986,7 @@ function CollaboratorDetail({ c, assignments, onBack, setModal, collabExtras, up
                     <div style={{display:"flex",alignItems:"center",gap:8,padding:"0 8px 6px"}}>
                       <button onClick={()=>{if(cM===0){setCY(y=>y-1);setCM(11);}else setCM(m=>m-1);}} style={{...S.btn,padding:"5px 10px",background:"#F8F9FB",color:"#1E2F4F",fontSize:14}}>&#8249;</button>
                       <div style={{flex:1,textAlign:"center",fontWeight:700,fontSize:13,color:"#1E2F4F"}}>{MONTH_NAMES[cM]} {cY}</div>
-                      <button onClick={()=>{setCY(2026);setCM(5);}} style={{...S.btn,padding:"5px 8px",background:"#FFFBEB",color:"#1E2F4F",fontSize:10}}>Auj.</button>
+                      <button onClick={()=>{setCY(new Date().getFullYear());setCM(new Date().getMonth());}} style={{...S.btn,padding:"5px 8px",background:"#FFFBEB",color:"#1E2F4F",fontSize:10}}>Auj.</button>
                       <button onClick={()=>{if(cM===11){setCY(y=>y+1);setCM(0);}else setCM(m=>m+1);}} style={{...S.btn,padding:"5px 10px",background:"#F8F9FB",color:"#1E2F4F",fontSize:14}}>&#8250;</button>
                     </div>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",padding:"0 8px 2px",gap:2}}>
@@ -3076,9 +3113,9 @@ function CollaboratorDetail({ c, assignments, onBack, setModal, collabExtras, up
 
 function HoursView({ assignments, collabExtras }) {
   const [mode,      setMode]      = useState("week");  // "week" | "month"
-  const [weekStart, setWeekStart] = useState("2026-06-09");
-  const [calYear,   setCalYear]   = useState(2026);
-  const [calMonth,  setCalMonth]  = useState(5);
+  const [weekStart, setWeekStart] = useState(getCurrentMonday());
+  const [calYear,   setCalYear]   = useState(new Date().getFullYear());
+  const [calMonth,  setCalMonth]  = useState(new Date().getMonth());
 
   const weekDates = Array.from({length:7},(_,i)=>{
     const d=new Date(weekStart+"T12:00:00"); d.setDate(d.getDate()+i); return d.toISOString().split("T")[0];
@@ -3115,7 +3152,7 @@ function HoursView({ assignments, collabExtras }) {
         <div style={{ display:"flex", alignItems:"center", gap:8, padding:"4px 16px 6px" }}>
           <button onClick={prevMonth} style={{ ...S.btn, padding:"5px 12px", background:"#F8F9FB", color:"#1E2F4F", fontSize:16 }}>&#8249;</button>
           <div style={{ flex:1, textAlign:"center", fontWeight:700, fontSize:14, color:"#1E2F4F" }}>{MONTH_NAMES[calMonth]} {calYear}</div>
-          <button onClick={()=>{setCalYear(2026);setCalMonth(5);}} style={{ ...S.btn, padding:"5px 10px", background:"#FFFBEB", color:"#1E2F4F", fontSize:11 }}>Auj.</button>
+          <button onClick={()=>{setCalYear(new Date().getFullYear());setCalMonth(new Date().getMonth());}} style={{ ...S.btn, padding:"5px 10px", background:"#FFFBEB", color:"#1E2F4F", fontSize:11 }}>Auj.</button>
           <button onClick={nextMonth} style={{ ...S.btn, padding:"5px 12px", background:"#F8F9FB", color:"#1E2F4F", fontSize:16 }}>&#8250;</button>
         </div>
       )}

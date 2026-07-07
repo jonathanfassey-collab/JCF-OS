@@ -430,10 +430,11 @@ function calcCommercialCost(cId, bt, extra, rates) {
 }
 function calcBlockedHours(c, bt, extra, rates) {
   const x = extra || 0;
-  // Priorité : rates > collab data > 35 par défaut
-  const r = rates && c ? (rates[c.id]||{}) : {};
-  const wh = (r.weeklyHours) || (c && c.weeklyHours) || 35;
-  const ct = (c && c.contract) || 0;
+  // Lire weeklyHours : INITIAL_RATES (source de vérité) > rates state > collab data
+  const ir = c ? (INITIAL_RATES[c.id]||{}) : {};
+  const r  = rates && c ? (rates[c.id]||{}) : {};
+  const wh = ir.weeklyHours || r.weeklyHours || (c && c.weeklyHours) || 35;
+  const ct = ir.weeklyHours ? Math.round(ir.weeklyHours * 4.33) : ((c && c.contract) || 0);
   if (bt==="day") return Math.round(wh/5*10)/10+x;
   if (bt==="week") return wh+x;
   if (bt==="fortnight") return wh*2+x;

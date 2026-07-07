@@ -516,6 +516,15 @@ export default function App() {
     setMads(p => p.map(m => m.id===id ? { ...m, ...ch } : m));
     try { await supaFetch("mads", "PATCH", madToRow({id,...ch}), "id=eq."+id); } catch(e) {}
   };
+  const deleteMad = async (mad) => {
+    setMads(p => p.filter(m => m.id !== mad.id));
+    try { await supaFetch("mads", "DELETE", null, "id=eq."+mad.id); } catch(e) {}
+    if (mad.startDate && mad.endDate && mad.collaboratorId) {
+      const dates = buildDateRange(mad.startDate, mad.endDate);
+      const toDelete = assignments.filter(a => a.collaboratorId===mad.collaboratorId && dates.includes(a.date) && isWorkType(a.typeId));
+      for (const a of toDelete) await deleteAssignment(a.id);
+    }
+  };
   const [cpRequests, setCpRequests] = useState([]);
   const addCpRequest = async (req) => {
     const entry = { ...req, id:"cp-"+Date.now() };
@@ -1191,7 +1200,7 @@ function AdminSpace({ user, onLogout, onRefresh, assignments, addAssignment, upd
       <div style={S.body}>
         {tab==="dashboard"     && <AdminDashboard    {...props} />}
         {tab==="planning"      && <PlanningView      {...props} />}
-        {tab==="mad"           && <MadView            mads={mads} addMad={addMad} updateMad={updateMad} assignments={assignments} rates={rates} partners={partners} collabExtras={collabExtras} />}
+        {tab==="mad"           && <MadView            mads={mads} addMad={addMad} updateMad={updateMad} deleteMad={deleteMad} assignments={assignments} rates={rates} partners={partners} collabExtras={collabExtras} />}
         {tab==="missions"      && <MissionsView      {...props} />}
         {tab==="conges" && (
           <div style={{ padding:"0 16px" }}>
@@ -4316,7 +4325,7 @@ const MAD_STATUS = {
   cancelled: { label:"Annulee",    color:"#C0392B", bg:"#FEF2F2" },
 };
 
-function MadView({ mads, addMad, updateMad, assignments, rates, partners, collabExtras }) {
+function MadView({ mads, addMad, updateMad, deleteMad, assignments, rates, partners, collabExtras }) {
   const [sel,    setSel]    = useState(null);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
@@ -4332,7 +4341,7 @@ function MadView({ mads, addMad, updateMad, assignments, rates, partners, collab
   }).sort((a,b) => b.startDate.localeCompare(a.startDate));
 
   if (sel) {
-    return (<MadDetail mad={sel} onBack={() => setSel(null)} updateMad={updateMad} rates={rates} partners={partners} collabExtras={collabExtras} />);
+    return (<MadDetail mad={sel} onBack={() => setSel(null)} updateMad={updateMad} deleteMad={deleteMad} assignments={assignments} rates={rates} partners={partners} collabExtras={collabExtras} />);
   }
 
   // KPIs
@@ -4409,7 +4418,7 @@ function MadView({ mads, addMad, updateMad, assignments, rates, partners, collab
   );
 }
 
-function MadDetail({ mad, onBack, updateMad, rates, partners, collabExtras }) {
+function MadDetail({ mad, onBack, updateMad, deleteMad, assignments, rates, partners, collabExtras }) {
   const c  = COLLABORATORS.find(x => x.id===mad.collaboratorId);
   const p  = partners.find(x => x.id===mad.partnerId);
   const st = MAD_STATUS[mad.status] || MAD_STATUS.pending;
@@ -4512,6 +4521,18 @@ function MadDetail({ mad, onBack, updateMad, rates, partners, collabExtras }) {
         <div style={{ background:"#F8F9FB", borderRadius:10, padding:"10px 14px", border:"1px solid #E5E7EB" }}>
           <div style={{ fontSize:10, color:"#9CA3AF", marginBottom:2 }}>Identifiant interne · non modifiable</div>
           <div style={{ fontFamily:"monospace", fontSize:12, fontWeight:700, color:"#2D456B", letterSpacing:"0.5px" }}>{mad.id}</div>
+        </div>
+        <div style={{ marginTop:12, background:"#FEF2F2", borderRadius:12, padding:"14px", border:"1px solid #FECACA" }}>
+          <div style={{ fontSize:12, color:"#C0392B", fontWeight:600, marginBottom:6 }}>Supprimer cette mise à disposition</div>
+          <div style={{ fontSize:11, color:"#B91C1C", marginBottom:12, lineHeight:1.5 }}>
+            Supprime la MAD et tous les jours de planning associés pour ce collaborateur sur cette période.
+          </div>
+          <button
+            style={{ width:"100%", border:"none", borderRadius:10, padding:"12px", fontSize:13, fontWeight:700, cursor:"pointer", background:"#C0392B", color:"#ffffff" }}
+            onClick={() => { if (window.confirm("Supprimer cette MAD et tout le planning associé ?")) { deleteMad(mad); onBack(); } }}
+          >
+            🗑 Supprimer la MAD + planning
+          </button>
         </div>
         <div style={{ height:8 }} />
       </div>

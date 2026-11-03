@@ -283,7 +283,7 @@ const INITIAL_PARTNERS = [
   { id:"p28", name:"Orange", commercial:"Orange Communications Luxembourg S.A.", category:"Entreprise", city:"Bertrange", country:"Luxembourg", phone:"+352 27 888 288", email:"corporate@orangeluxembourg.lu", contact:"", comment:"Tél. général : 800 61 606", sites:["s27"], status:"active" },
   { id:"p29", name:"Škoda Tour", commercial:"TDL Organisation a.s.b.l.", category:"Association", city:"Hesperange", country:"Luxembourg", phone:"", email:"info@skodatour.lu", contact:"", comment:"Site de mission variable selon l'étape · Adresse postale uniquement", sites:["s28"], status:"active" },
   { id:"p30", name:"Place de Paris", commercial:"KRYS Place de Paris (KLUX)", category:"Magasin", city:"Luxembourg", country:"Luxembourg", phone:"", email:"klux@jcf.lu", contact:"", comment:"Magasin de rattachement regulier des collaborateurs", sites:["s29"], status:"active" },
-  { id:"p31", name:"Strassen", commercial:"KRYS Strassen", category:"Magasin", city:"Strassen", country:"Luxembourg", phone:"", email:"strassen@jcf.lu", contact:"", comment:"Magasin de rattachement regulier des collaborateurs", sites:["s30"], status:"active" },
+  { id:"p31", name:"Strassen", commercial:"STRASSEN Optic (KRYS Strassen)", category:"Magasin", city:"Strassen", country:"Luxembourg", phone:"", email:"strassen@jcf.lu", contact:"", comment:"Magasin de rattachement regulier des collaborateurs", sites:["s30"], status:"active" },
 ];
 
 const INITIAL_SITES = [
@@ -315,8 +315,8 @@ const INITIAL_SITES = [
   { id:"s26", partnerId:"p27", name:"Van Mossel Autolease Bertrange", address:"9 rue des Mérovingiens, ZA Bourmicht, L-8070", city:"Bertrange", country:"Luxembourg" },
   { id:"s27", partnerId:"p28", name:"Orange Bertrange", address:"8 rue des Mérovingiens, L-8070", city:"Bertrange", country:"Luxembourg" },
   { id:"s28", partnerId:"p29", name:"TDL Organisation (adresse postale)", address:"B.P. 76, L-5801", city:"Hesperange", country:"Luxembourg" },
-  { id:"s29", partnerId:"p30", name:"Place de Paris", address:"Place de Paris", city:"Luxembourg", country:"Luxembourg" },
-  { id:"s30", partnerId:"p31", name:"Strassen", address:"226 route d'Arlon", city:"Strassen", country:"Luxembourg" },
+  { id:"s29", partnerId:"p30", name:"Place de Paris", address:"2 place de Paris, L-1734", city:"Luxembourg", country:"Luxembourg" },
+  { id:"s30", partnerId:"p31", name:"Strassen", address:"226 route d'Arlon, L-8010", city:"Strassen", country:"Luxembourg" },
 ];
 
 // ── Mises a disposition initiales (Chapitre 4) ───────────────────────────────

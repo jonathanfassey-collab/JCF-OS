@@ -192,7 +192,7 @@ const INITIAL_RATES = {
   "c18": { weeklyHours:40, mutuelle:55.77, hourly:27.81, day:213.55, week:1023.28, fortnight:1957.58, minimumMonthly:3855.76, month:3911.53 },
   "c19": { weeklyHours:40, mutuelle:57.77, hourly:46.95, day:360.57, week:1727.73, fortnight:3305.22, minimumMonthly:6510.15, month:6567.92 },
   "c20": { weeklyHours:40, mutuelle:57.77, hourly:46.95, day:360.57, week:1727.73, fortnight:3305.22, minimumMonthly:6510.15, month:6567.92 },
-  "c21": { weeklyHours:40, mutuelle:0, hourly:0, day:0, week:0, fortnight:0, minimumMonthly:0, month:0 }, // a completer depuis la grille
+  "c21": { weeklyHours:40, mutuelle:50.77, hourly:32.2, day:247.3, week:1184.97, fortnight:2266.89, minimumMonthly:4465, month:4515.77 },
 };
 
 // Tarifs indexés, appliqués automatiquement à partir du 01/02/2027.
@@ -220,6 +220,7 @@ const INDEXED_RATES = {
   "c18": { weeklyHours:40, mutuelle:55.77, hourly:28.62, day:219.76, week:1053.04, fortnight:2014.5, minimumMonthly:3967.96, month:4023.73 },
   "c19": { weeklyHours:40, mutuelle:57.77, hourly:48.43, day:371.92, week:1782.13, fortnight:3409.29, minimumMonthly:6715.26, month:6773.03 },
   "c20": { weeklyHours:40, mutuelle:57.77, hourly:48.43, day:371.92, week:1782.13, fortnight:3409.29, minimumMonthly:6715.26, month:6773.03 },
+  "c21": { weeklyHours:40, mutuelle:50.77, hourly:33.16, day:254.69, week:1220.38, fortnight:2334.64, minimumMonthly:4598.53, month:4649.3 },
 };
 
 // Tarifs applicables à une date (AAAA-MM-JJ) : indexés à partir du 01/02/2027

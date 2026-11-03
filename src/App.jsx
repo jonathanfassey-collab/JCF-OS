@@ -91,6 +91,9 @@ const MISSIONS = [
   { id:"m5", name:"GLOBUS"               }, { id:"m6", name:"ONE LIFE"            },
   { id:"m7", name:"Depistage entreprise" }, { id:"m8", name:"BIL"                 },
   { id:"m9", name:"Raiffeisen"           }, { id:"m10", name:"Post"               },
+  { id:"m11", name:"Päiperléck"          }, { id:"m12", name:"Ginkgo"             },
+  { id:"m13", name:"Indosuez"            }, { id:"m14", name:"Van Mossel"         },
+  { id:"m15", name:"Orange"              }, { id:"m16", name:"Škoda Tour"         },
 ];
 
 const MISSION_COLORS = {
@@ -98,6 +101,8 @@ const MISSION_COLORS = {
   "GLOBUS":"#C0392B","ONE LIFE":"#D97706","AGENT F":"#5D84C3",
   "Depistage entreprise":"#6B7280",
   "BIL":"#1E6B4F","Raiffeisen":"#C0392B","Post":"#F59E0B",
+  "Päiperléck":"#0D9488","Ginkgo":"#65A30D","Indosuez":"#9D174D",
+  "Van Mossel":"#0369A1","Orange":"#EA580C","Škoda Tour":"#A16207",
 };
 
 const ALL_LOCATIONS = [...STORES, ...MISSIONS];
@@ -161,7 +166,7 @@ const INITIAL_PARTNERS = [
   { id:"p2",  name:"APEX",           commercial:"APEX Assurances",   category:"Assureur",   city:"Luxembourg",    country:"Luxembourg", phone:"+352 42 42 1",    email:"contact@apex.lu",    contact:"Direction",     comment:"",                            sites:["s2"],       status:"active" },
   { id:"p3",  name:"ALEBA",          commercial:"ALEBA",             category:"Association",city:"Luxembourg",    country:"Luxembourg", phone:"+352 48 48 1",    email:"contact@aleba.lu",   contact:"Secretariat",   comment:"Syndicat banque",             sites:["s3"],       status:"active" },
   { id:"p4",  name:"GLOBUS",         commercial:"Globus Luxembourg", category:"Grand compte",city:"Luxembourg",   country:"Luxembourg", phone:"+352 22 22 1",    email:"contact@globus.lu",  contact:"RH",            comment:"",                            sites:["s4"],       status:"active" },
-  { id:"p5",  name:"ONE LIFE",       commercial:"One Life",          category:"Assureur",   city:"Luxembourg",    country:"Luxembourg", phone:"+352 26 26 1",    email:"info@onelife.eu",    contact:"Operations",    comment:"",                            sites:["s5"],       status:"active" },
+  { id:"p5",  name:"ONE LIFE",       commercial:"One Life",          category:"Assureur",   city:"Capellen",      country:"Luxembourg", phone:"+352 45 67 301",  email:"info@onelife.com",    contact:"Operations",    comment:"",                            sites:["s5"],       status:"active" },
   { id:"p6",  name:"Nancy CC",       commercial:"Krys Nancy CC",     category:"Magasin",    city:"Nancy",         country:"France",     phone:"+33 3 83 11 11",  email:"nancy-cc@krys.fr",   contact:"Responsable",   comment:"",                            sites:["s6"],       status:"active" },
   { id:"p7",  name:"Nancy centre",   commercial:"Krys Nancy centre", category:"Magasin",    city:"Nancy",         country:"France",     phone:"+33 3 83 22 22",  email:"nancy-ctr@krys.fr",  contact:"Responsable",   comment:"",                            sites:["s7"],       status:"active" },
   { id:"p8",  name:"Luxembourg",     commercial:"Krys Luxembourg",   category:"Magasin",    city:"Luxembourg",    country:"Luxembourg", phone:"+352 26 10 10",   email:"lux@krys.lu",        contact:"Responsable",   comment:"Site principal LU",           sites:["s8"],       status:"active" },
@@ -180,6 +185,12 @@ const INITIAL_PARTNERS = [
   { id:"p21", name:"Raiffeisen",     commercial:"Banque Raiffeisen",  category:"Entreprise", city:"Luxembourg",    country:"Luxembourg", phone:"",                email:"raiffeisen@jcf.lu",  contact:"RH",            comment:"",                            sites:["s20"],      status:"active" },
   { id:"p22", name:"Post",           commercial:"Post Luxembourg",    category:"Entreprise", city:"Luxembourg",    country:"Luxembourg", phone:"",                email:"post@jcf.lu",        contact:"RH",            comment:"",                            sites:["s21"],      status:"active" },
   { id:"p23", name:"Toul",           commercial:"KRYS Toul",          category:"Magasin",    city:"Toul",          country:"France",     phone:"",                email:"toul@jcf.lu",        contact:"",              comment:"",                            sites:["s22"],      status:"active" },
+  { id:"p24", name:"Päiperléck", commercial:"Päiperléck S.à r.l.", category:"Entreprise", city:"Wormeldange-Haut", country:"Luxembourg", phone:"+352 24 25", email:"info@paiperleck.lu", contact:"", comment:"", sites:["s23"], status:"active" },
+  { id:"p25", name:"Ginkgo", commercial:"Ginkgo Solutions Facilities", category:"Entreprise", city:"Luxembourg", country:"Luxembourg", phone:"+352 28 488 1", email:"", contact:"", comment:"Identité à valider · Forme juridique à vérifier · Contact via formulaire officiel", sites:["s24"], status:"active" },
+  { id:"p26", name:"Indosuez", commercial:"CA Indosuez Wealth (Europe)", category:"Entreprise", city:"Luxembourg", country:"Luxembourg", phone:"+352 24 67 1", email:"", contact:"", comment:"Siège social : 39 allée Scheffer, L-2520 Luxembourg · Contact via formulaire officiel", sites:["s25"], status:"active" },
+  { id:"p27", name:"Van Mossel", commercial:"Van Mossel Autolease Luxembourg", category:"Entreprise", city:"Bertrange", country:"Luxembourg", phone:"+352 43 96 96 2500", email:"contact.leasing.luxembourg@vanmossel.lu", contact:"", comment:"Société contractante et lieu précis de mission à confirmer", sites:["s26"], status:"active" },
+  { id:"p28", name:"Orange", commercial:"Orange Communications Luxembourg S.A.", category:"Entreprise", city:"Bertrange", country:"Luxembourg", phone:"+352 27 888 288", email:"corporate@orangeluxembourg.lu", contact:"", comment:"Tél. général : 800 61 606", sites:["s27"], status:"active" },
+  { id:"p29", name:"Škoda Tour", commercial:"TDL Organisation a.s.b.l.", category:"Association", city:"Hesperange", country:"Luxembourg", phone:"", email:"info@skodatour.lu", contact:"", comment:"Site de mission variable selon l'étape · Adresse postale uniquement", sites:["s28"], status:"active" },
 ];
 
 const INITIAL_SITES = [
@@ -187,7 +198,7 @@ const INITIAL_SITES = [
   { id:"s2", partnerId:"p2", name:"Siege APEX",      address:"4 rue Albert Borschette", city:"Luxembourg", country:"Luxembourg" },
   { id:"s3", partnerId:"p3", name:"Siege ALEBA",     address:"2 rue de la Greve", city:"Luxembourg", country:"Luxembourg" },
   { id:"s4", partnerId:"p4", name:"Globus LU",       address:"22 bd Royal", city:"Luxembourg", country:"Luxembourg" },
-  { id:"s5", partnerId:"p5", name:"One Life HQ",     address:"15 rue Edward Steichen", city:"Luxembourg", country:"Luxembourg" },
+  { id:"s5", partnerId:"p5", name:"One Life HQ",     address:"38 Parc d'Activités de Capellen, L-8308", city:"Capellen", country:"Luxembourg" },
   { id:"s6", partnerId:"p6", name:"Nancy CC",        address:"Centre commercial St Sebastian", city:"Nancy", country:"France" },
   { id:"s7", partnerId:"p7", name:"Nancy centre",    address:"10 rue St Jean", city:"Nancy", country:"France" },
   { id:"s8", partnerId:"p8", name:"Luxembourg ville",address:"3 rue Philippe II", city:"Luxembourg", country:"Luxembourg" },
@@ -205,6 +216,12 @@ const INITIAL_SITES = [
   { id:"s20", partnerId:"p21", name:"Raiffeisen Luxembourg",  address:"",                        city:"Luxembourg",      country:"Luxembourg"  },
   { id:"s21", partnerId:"p22", name:"Post Luxembourg",        address:"",                        city:"Luxembourg",      country:"Luxembourg"  },
   { id:"s22", partnerId:"p23", name:"Toul",                   address:"",                        city:"Toul",            country:"France"      },
+  { id:"s23", partnerId:"p24", name:"Päiperléck - Siège administratif", address:"64 Hiel, L-5485", city:"Wormeldange-Haut", country:"Luxembourg" },
+  { id:"s24", partnerId:"p25", name:"Ginkgo - The Place", address:"2 place de Paris, L-2314", city:"Luxembourg", country:"Luxembourg" },
+  { id:"s25", partnerId:"p26", name:"Indosuez - Ruppert", address:"12 rue Eugène Ruppert, L-2453", city:"Luxembourg", country:"Luxembourg" },
+  { id:"s26", partnerId:"p27", name:"Van Mossel Autolease Bertrange", address:"9 rue des Mérovingiens, ZA Bourmicht, L-8070", city:"Bertrange", country:"Luxembourg" },
+  { id:"s27", partnerId:"p28", name:"Orange Bertrange", address:"8 rue des Mérovingiens, L-8070", city:"Bertrange", country:"Luxembourg" },
+  { id:"s28", partnerId:"p29", name:"TDL Organisation (adresse postale)", address:"B.P. 76, L-5801", city:"Hesperange", country:"Luxembourg" },
 ];
 
 // ── Mises a disposition initiales (Chapitre 4) ───────────────────────────────

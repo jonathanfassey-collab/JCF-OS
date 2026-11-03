@@ -401,6 +401,8 @@ const ACCOUNT_DIRECTORY = [
   { name:"Van Mossel",     role:"store", login:"vanmossel@jcf.lu",   locationId:"m14" },
   { name:"Orange",         role:"store", login:"orange@jcf.lu",      locationId:"m15" },
   { name:"Škoda Tour",     role:"store", login:"skodatour@jcf.lu",   locationId:"m16" },
+  { name:"Place de Paris", role:"store", login:"klux@jcf.lu",        locationId:"l29" },
+  { name:"Strassen",       role:"store", login:"strassen@jcf.lu",    locationId:"l30" },
 
   // Collaborateurs — [prenom]@jcf.lu
   { name:"Benjamin",   role:"replacement", login:"benjamin@jcf.lu", collaboratorId:"c2"  },
@@ -419,8 +421,9 @@ const ACCOUNT_DIRECTORY = [
   { name:"Guillaume O", role:"replacement", login:"guillaumeo@jcf.lu", collaboratorId:"c16" },
   { name:"Jean M",      role:"replacement", login:"jean@jcf.lu", collaboratorId:"c17" },
   { name:"Laetitia",    role:"replacement", login:"laetitia@jcf.lu", collaboratorId:"c18" },
-  { name:"Nabil",       role:"replacement", login:"nabil@jcf.lu", collaboratorId:"c19" },
+  { name:"Nabeil",      role:"replacement", login:"nabil@jcf.lu", collaboratorId:"c19" },
   { name:"Ozgür",       role:"replacement", login:"ozgur@jcf.lu", collaboratorId:"c20" },
+  { name:"Aurore F",    role:"replacement", login:"aurore@jcf.lu", collaboratorId:"c21" },
 ];
 
 const TODAY = new Date().toISOString().split("T")[0];

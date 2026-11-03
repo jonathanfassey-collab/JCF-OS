@@ -366,8 +366,13 @@ function fmtDateFR(ds) {
   const d = new Date(ds + "T12:00:00");
   return DAY_NAMES[d.getDay()] + " " + d.getDate() + " " + MONTH_NAMES[d.getMonth()] + " " + d.getFullYear();
 }
-let _nextId = 5000;
-function newId() { return "ax" + (_nextId++); }
+// Identifiant unique d'affectation. L'ancien compteur repartait de ax5000 à
+// chaque chargement de page : les nouvelles réservations réutilisaient des
+// identifiants déjà en base et étaient refusées sans message.
+function newId() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return "ax-" + crypto.randomUUID();
+  return "ax-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+}
 
 function buildDateRange(s, e) {
   const dates = []; const c = new Date(s + "T12:00:00"); const end = new Date(e + "T12:00:00");

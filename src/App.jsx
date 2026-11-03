@@ -65,6 +65,7 @@ const COLLABORATORS = [
   { id:"c13", name:"Valerie",    contract:69,   weeklyHours:16, avatar:"VA", color:"#D4AF37", special:"associate" },
   { id:"c14", name:"Guillaume",  contract:16,   weeklyHours:4,  avatar:"GP", color:"#2D456B", special:"associate" },
   { id:"c15", name:"Celine H",   contract:0,    weeklyHours:0,  avatar:"CH", color:"#9CA3AF", special:"associate" },
+  { id:"c16", name:"Guillaume O", contract:173,  weeklyHours:40, avatar:"GO", color:"#0EA5E9" },
 ];
 
 const STORES = [
@@ -81,7 +82,7 @@ const STORES = [
   { id:"l21", name:"Bazaine"         }, { id:"l22", name:"Jeuxey"          },
   { id:"l23", name:"Xertigny"        }, { id:"l24", name:"Betting"         },
   { id:"l25", name:"Hettange-Grande" }, { id:"l26", name:"Clouange"        },
-  { id:"l27", name:"Haguenau"        },
+  { id:"l27", name:"Haguenau"        }, { id:"l28", name:"Toul"            },
 ];
 
 const MISSIONS = [
@@ -128,6 +129,7 @@ const INITIAL_RATES = {
   "c13": { weeklyHours:16, mutuelle:0, hourly:0, day:0, week:0, fortnight:0, minimumMonthly:0, month:0 },
   "c14": { weeklyHours:4, mutuelle:0, hourly:0, day:0, week:0, fortnight:0, minimumMonthly:0, month:0 },
   "c15": { weeklyHours:0, mutuelle:0, hourly:0, day:0, week:0, fortnight:0, minimumMonthly:0, month:0 },
+  "c16": { weeklyHours:40, mutuelle:55.77, hourly:31.83, day:244.49, week:1171.52, fortnight:2241.16, minimumMonthly:4414.32, month:4470.09 },
 };
 
 const RATES = { hourly:45, halfDay:180, fullDay:320, week:1400, fortnight:2600, month:4500 };
@@ -177,6 +179,7 @@ const INITIAL_PARTNERS = [
   { id:"p20", name:"BIL",            commercial:"Banque BIL",         category:"Entreprise", city:"Luxembourg",    country:"Luxembourg", phone:"",                email:"bil@jcf.lu",         contact:"RH",            comment:"",                            sites:["s19"],      status:"active" },
   { id:"p21", name:"Raiffeisen",     commercial:"Banque Raiffeisen",  category:"Entreprise", city:"Luxembourg",    country:"Luxembourg", phone:"",                email:"raiffeisen@jcf.lu",  contact:"RH",            comment:"",                            sites:["s20"],      status:"active" },
   { id:"p22", name:"Post",           commercial:"Post Luxembourg",    category:"Entreprise", city:"Luxembourg",    country:"Luxembourg", phone:"",                email:"post@jcf.lu",        contact:"RH",            comment:"",                            sites:["s21"],      status:"active" },
+  { id:"p23", name:"Toul",           commercial:"KRYS Toul",          category:"Magasin",    city:"Toul",          country:"France",     phone:"",                email:"toul@jcf.lu",        contact:"",              comment:"",                            sites:["s22"],      status:"active" },
 ];
 
 const INITIAL_SITES = [
@@ -201,6 +204,7 @@ const INITIAL_SITES = [
   { id:"s19", partnerId:"p20", name:"BIL Luxembourg",         address:"",                        city:"Luxembourg",      country:"Luxembourg"  },
   { id:"s20", partnerId:"p21", name:"Raiffeisen Luxembourg",  address:"",                        city:"Luxembourg",      country:"Luxembourg"  },
   { id:"s21", partnerId:"p22", name:"Post Luxembourg",        address:"",                        city:"Luxembourg",      country:"Luxembourg"  },
+  { id:"s22", partnerId:"p23", name:"Toul",                   address:"",                        city:"Toul",            country:"France"      },
 ];
 
 // ── Mises a disposition initiales (Chapitre 4) ───────────────────────────────
@@ -224,6 +228,7 @@ const COLLAB_EXTRA = {
   "c13": { jobCategory:"Optometriste",           skills:["Depistage entreprise"],       sector:"Luxembourg",  sectorAlt:"",           country:"Luxembourg", phone:"", email:"valerie@jcf.lu",     comment:"CDI 01/10/2025 · 16h · 83,20h CP · Associee", status:"active", contractDate:"2025-10-01", cpHours:83.2, noWorkDays:[], special:"associate" },
   "c14": { jobCategory:"Responsable commercial", skills:["Depistage entreprise"],       sector:"Luxembourg",  sectorAlt:"",           country:"France",     phone:"", email:"guillaume@jcf.lu",    comment:"CDI 01/01/2026 · 16h/mois · 26j CP · 1200 net + 300 frais · Associe", status:"active", contractDate:"2026-01-01", cpHours:26, noWorkDays:[], special:"associate" },
   "c15": { jobCategory:"",                       skills:[],                             sector:"",            sectorAlt:"",           country:"Luxembourg", phone:"", email:"celineh@jcf.lu",     comment:"Profil a completer", status:"active", contractDate:"", cpHours:0, noWorkDays:[], special:"associate" },
+  "c16": { jobCategory:"",                       skills:[],                             sector:"Lorraine",    sectorAlt:"",           country:"France",     phone:"", email:"guillaumeo@jcf.lu",  comment:"", status:"active", contractDate:"", cpHours:208, noWorkDays:[] },
 };
 
 
@@ -277,6 +282,7 @@ const USERS = [
   { id:"u49", name:"ALEBA",          role:"store", email:"aleba@jcf.lu",       password:STORE_PASSWORD, locationId:"m2"  },
   { id:"u50", name:"GLOBUS",         role:"store", email:"globus@jcf.lu",      password:STORE_PASSWORD, locationId:"m5"  },
   { id:"u51", name:"ONE LIFE",       role:"store", email:"onelife@jcf.lu",     password:STORE_PASSWORD, locationId:"m6"  },
+  { id:"u52", name:"Toul",           role:"store", email:"toul@jcf.lu",        password:STORE_PASSWORD, locationId:"l28" },
 
   // Collaborateurs — [prenom]@jcf.lu / remp123
   { id:"u6",  name:"Margaux M",  role:"replacement", email:"margauxm@jcf.lu",  password:REMP_PASSWORD, collaboratorId:"c1"  },
@@ -294,6 +300,7 @@ const USERS = [
   { id:"u18", name:"Valerie",    role:"replacement", email:"valerie@jcf.lu",   password:REMP_PASSWORD, collaboratorId:"c13" },
   { id:"u19", name:"Guillaume",  role:"replacement", email:"guillaume@jcf.lu", password:REMP_PASSWORD, collaboratorId:"c14" },
   { id:"u20", name:"Celine H",   role:"replacement", email:"celineh@jcf.lu",   password:REMP_PASSWORD, collaboratorId:"c15" },
+  { id:"u53", name:"Guillaume O", role:"replacement", email:"guillaumeo@jcf.lu", password:REMP_PASSWORD, collaboratorId:"c16" },
 ];
 
 // Genere automatiquement un compte partenaire selon la convention

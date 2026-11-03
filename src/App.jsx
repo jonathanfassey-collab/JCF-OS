@@ -100,8 +100,7 @@ function rowToCp(r) { return { id:r.id, collaboratorId:r.collaborator_id, dates:
 // ════════════════════════════════════════════════════════════
 
 const COLLABORATORS = [
-  { id:"c1",  name:"Margaux M",  contract:121,  weeklyHours:28, avatar:"MM", color:"#10B981" },
-  { id:"c2",  name:"Benjamin",   contract:160,  weeklyHours:37, avatar:"BE", color:"#3B82F6" },
+  { id:"c2",  name:"Benjamin",   contract:152,  weeklyHours:35, avatar:"BE", color:"#3B82F6" },
   { id:"c3",  name:"Dozkhaz",    contract:173,  weeklyHours:40, avatar:"DO", color:"#8B5CF6" },
   { id:"c4",  name:"Mathilde",   contract:152,  weeklyHours:35, avatar:"MA", color:"#F59E0B" },
   { id:"c5",  name:"Pauline",    contract:173,  weeklyHours:40, avatar:"PA", color:"#EF4444" },
@@ -109,13 +108,16 @@ const COLLABORATORS = [
   { id:"c7",  name:"ABBI",       contract:139,  weeklyHours:32, avatar:"AG", color:"#14B8A6" },
   { id:"c8",  name:"Margaux K",  contract:173,  weeklyHours:40, avatar:"MK", color:"#6366F1" },
   { id:"c9",  name:"Laura G",    contract:139,  weeklyHours:32, avatar:"LG", color:"#84CC16" },
-  { id:"c10", name:"Caroline",   contract:152,  weeklyHours:35, avatar:"CA", color:"#F97316" },
   { id:"c11", name:"Julie W",    contract:173,  weeklyHours:40, avatar:"JW", color:"#06B6D4" },
   { id:"c12", name:"Lucinda",    contract:120,  weeklyHours:28, avatar:"LU", color:"#A855F7" },
-  { id:"c13", name:"Valerie",    contract:69,   weeklyHours:16, avatar:"VA", color:"#D4AF37", special:"associate" },
-  { id:"c14", name:"Guillaume",  contract:16,   weeklyHours:4,  avatar:"GP", color:"#2D456B", special:"associate" },
-  { id:"c15", name:"Celine H",   contract:0,    weeklyHours:0,  avatar:"CH", color:"#9CA3AF", special:"associate" },
+  { id:"c13", name:"Valerie",    contract:65,   weeklyHours:15, avatar:"VA", color:"#D4AF37", special:"associate" },
+  { id:"c14", name:"Guillaume",  contract:65,   weeklyHours:15, avatar:"GP", color:"#2D456B", special:"associate" },
+  { id:"c15", name:"Celine H",   contract:173,  weeklyHours:40, avatar:"CH", color:"#9CA3AF", special:"associate" },
   { id:"c16", name:"Guillaume O", contract:173,  weeklyHours:40, avatar:"GO", color:"#0EA5E9" },
+  { id:"c17", name:"Jean M",      contract:65,   weeklyHours:15, avatar:"JM", color:"#F97316" },
+  { id:"c18", name:"Laetitia",    contract:173,  weeklyHours:40, avatar:"LM", color:"#10B981" },
+  { id:"c19", name:"Nabil",       contract:173,  weeklyHours:40, avatar:"NC", color:"#E11D48" },
+  { id:"c20", name:"Ozgür",       contract:173,  weeklyHours:40, avatar:"OD", color:"#7C3AED" },
 ];
 
 const STORES = [
@@ -168,24 +170,60 @@ const ABSENCE_TYPES = [
   { id:"recup",    name:"Recup",    countsHours:false, color:"#5D84C3", bg:"#EFF6FF", textColor:"#1D4ED8" },
 ];
 
+// Tarifs actuels — source : Grille_Tarifs (Google Sheets), colonnes heure à mois
 const INITIAL_RATES = {
-  "c1": { weeklyHours:28, mutuelle:92.77, hourly:27.84, day:155.9, week:779.52, fortnight:1559.04, minimumMonthly:3378.28, month:3378.28 },
-  "c2": { weeklyHours:37, mutuelle:50.77, hourly:32.09, day:215.65, week:1034.15, fortnight:2275.12, minimumMonthly:3893.78, month:3947.46 },
-  "c3": { weeklyHours:40, mutuelle:58.77, hourly:46.83, day:359.62, week:1721.19, fortnight:3786.63, minimumMonthly:6480.67, month:6539.44 },
-  "c4": { weeklyHours:35, mutuelle:50.77, hourly:37.02, day:248.75, week:1192.88, fortnight:2624.35, minimumMonthly:4491.47, month:4542.24 },
-  "c5": { weeklyHours:40, mutuelle:50.77, hourly:27.36, day:210.14, week:1005.77, fortnight:2212.69, minimumMonthly:3786.94, month:3837.71 },
-  "c6": { weeklyHours:32, mutuelle:55.77, hourly:37.08, day:227.81, week:1092.45, fortnight:2403.4, minimumMonthly:4113.33, month:4169.1 },
-  "c7": { weeklyHours:32, mutuelle:55.77, hourly:34.32, day:210.88, week:1011.28, fortnight:2224.81, minimumMonthly:3807.68, month:3863.45 },
-  "c8": { weeklyHours:40, mutuelle:55.77, hourly:31.91, day:245.1, week:1173.08, fortnight:2580.77, minimumMonthly:4416.89, month:4472.66 },
-  "c9": { weeklyHours:32, mutuelle:55.77, hourly:41.03, day:252.1, week:1208.96, fortnight:2659.71, minimumMonthly:4551.99, month:4607.76 },
-  "c10": { weeklyHours:35, mutuelle:92.77, hourly:0, day:0, week:0, fortnight:0, minimumMonthly:0, month:0 },
-  "c11": { weeklyHours:40, mutuelle:58.77, hourly:45.06, day:346.07, week:1656.33, fortnight:3643.92, minimumMonthly:6236.43, month:6295.2 },
-  "c12": { weeklyHours:32, mutuelle:40.77, hourly:31.28, day:192.18, week:921.6, fortnight:2027.53, minimumMonthly:3470.04, month:3510.81 },
-  "c13": { weeklyHours:16, mutuelle:0, hourly:0, day:0, week:0, fortnight:0, minimumMonthly:0, month:0 },
-  "c14": { weeklyHours:4, mutuelle:0, hourly:0, day:0, week:0, fortnight:0, minimumMonthly:0, month:0 },
-  "c15": { weeklyHours:0, mutuelle:0, hourly:0, day:0, week:0, fortnight:0, minimumMonthly:0, month:0 },
+  "c2": { weeklyHours:35, mutuelle:50.77, hourly:31.79, day:213.6, week:1023.49, fortnight:1957.98, minimumMonthly:3856.71, month:3907.48 },
+  "c3": { weeklyHours:40, mutuelle:58.77, hourly:42.23, day:324.32, week:1554.03, fortnight:2972.94, minimumMonthly:5855.67, month:5914.44 },
+  "c4": { weeklyHours:35, mutuelle:50.77, hourly:36.84, day:247.53, week:1186.1, fortnight:2269.07, minimumMonthly:4469.47, month:4520.24 },
+  "c5": { weeklyHours:40, mutuelle:50.77, hourly:27.31, day:209.74, week:1005.01, fortnight:1922.64, minimumMonthly:3786.94, month:3837.71 },
+  "c6": { weeklyHours:32, mutuelle:55.77, hourly:31.9, day:195.98, week:939.09, fortnight:1796.51, minimumMonthly:3538.67, month:3594.44 },
+  "c7": { weeklyHours:32, mutuelle:55.77, hourly:28.55, day:175.44, week:840.63, fortnight:1608.17, minimumMonthly:3167.68, month:3223.45 },
+  "c8": { weeklyHours:40, mutuelle:55.77, hourly:31.85, day:244.63, week:1172.2, fortnight:2242.46, minimumMonthly:4416.89, month:4472.66 },
+  "c9": { weeklyHours:32, mutuelle:55.77, hourly:41.85, day:257.11, week:1231.97, fortnight:2356.81, minimumMonthly:4642.32, month:4698.09 },
+  "c11": { weeklyHours:40, mutuelle:58.77, hourly:42.42, day:325.81, week:1561.18, fortnight:2986.61, minimumMonthly:5882.61, month:5941.38 },
+  "c12": { weeklyHours:32, mutuelle:40.77, hourly:33.06, day:203.1, week:973.17, fortnight:1861.71, minimumMonthly:3667.1, month:3707.87 },
+  "c13": { weeklyHours:15, mutuelle:92.77, hourly:41.33, day:119.02, week:570.31, fortnight:1091.04, minimumMonthly:2149.01, month:2241.78 },
+  "c14": { weeklyHours:15, mutuelle:58.77, hourly:41.06, day:118.26, week:566.68, fortnight:1084.09, minimumMonthly:2135.32, month:2194.09 },
+  "c15": { weeklyHours:40, mutuelle:78.77, hourly:34.01, day:261.23, week:1251.72, fortnight:2394.6, minimumMonthly:4716.54, month:4795.31 },
   "c16": { weeklyHours:40, mutuelle:55.77, hourly:31.83, day:244.49, week:1171.52, fortnight:2241.16, minimumMonthly:4414.32, month:4470.09 },
+  "c17": { weeklyHours:15, mutuelle:92.77, hourly:38.53, day:110.97, week:531.73, fortnight:1017.22, minimumMonthly:2003.61, month:2096.38 },
+  "c18": { weeklyHours:40, mutuelle:55.77, hourly:27.81, day:213.55, week:1023.28, fortnight:1957.58, minimumMonthly:3855.76, month:3911.53 },
+  "c19": { weeklyHours:40, mutuelle:57.77, hourly:46.95, day:360.57, week:1727.73, fortnight:3305.22, minimumMonthly:6510.15, month:6567.92 },
+  "c20": { weeklyHours:40, mutuelle:57.77, hourly:46.95, day:360.57, week:1727.73, fortnight:3305.22, minimumMonthly:6510.15, month:6567.92 },
 };
+
+// Tarifs indexés, appliqués automatiquement à partir du 01/02/2027.
+// Source : « Tarif mois après indexation » de la grille ; heure, jour, semaine
+// et quinzaine recalculés avec la règle de la grille : taux de base =
+// (mois - mutuelle) / heures par mois, x 1,25 heure / 1,20 jour / 1,15 semaine /
+// 1,10 quinzaine. Mutuelle inchangée.
+const RATE_INDEXATION_DATE = "2027-02-01";
+const INDEXED_RATES = {
+  "c2": { weeklyHours:35, mutuelle:50.77, hourly:32.71, day:219.82, week:1053.3, fortnight:2015, minimumMonthly:3968.94, month:4019.71 },
+  "c3": { weeklyHours:40, mutuelle:58.77, hourly:43.5, day:334.11, week:1600.96, fortnight:3062.71, minimumMonthly:6032.62, month:6091.39 },
+  "c4": { weeklyHours:35, mutuelle:50.77, hourly:37.94, day:254.94, week:1221.61, fortnight:2336.98, minimumMonthly:4603.15, month:4653.92 },
+  "c5": { weeklyHours:40, mutuelle:50.77, hourly:28.1, day:215.82, week:1034.13, fortnight:1978.34, minimumMonthly:3896.73, month:3947.5 },
+  "c6": { weeklyHours:32, mutuelle:55.77, hourly:32.81, day:201.59, week:965.94, fortnight:1847.88, minimumMonthly:3639.77, month:3695.54 },
+  "c7": { weeklyHours:32, mutuelle:55.77, hourly:29.35, day:180.32, week:864.04, fortnight:1652.94, minimumMonthly:3255.8, month:3311.57 },
+  "c8": { weeklyHours:40, mutuelle:55.77, hourly:32.8, day:251.93, week:1207.16, fortnight:2309.36, minimumMonthly:4548.73, month:4604.5 },
+  "c9": { weeklyHours:32, mutuelle:55.77, hourly:43.11, day:264.85, week:1269.08, fortnight:2427.81, minimumMonthly:4782.05, month:4837.82 },
+  "c11": { weeklyHours:40, mutuelle:58.77, hourly:43.74, day:335.95, week:1609.76, fortnight:3079.53, minimumMonthly:6065.75, month:6124.52 },
+  "c12": { weeklyHours:32, mutuelle:40.77, hourly:34.01, day:208.95, week:1001.22, fortnight:1915.37, minimumMonthly:3772.7, month:3813.47 },
+  "c13": { weeklyHours:15, mutuelle:92.77, hourly:42.34, day:121.93, week:584.24, fortnight:1117.67, minimumMonthly:2201.48, month:2294.25 },
+  "c14": { weeklyHours:15, mutuelle:58.77, hourly:42.06, day:121.14, week:580.48, fortnight:1110.48, minimumMonthly:2187.31, month:2246.08 },
+  "c15": { weeklyHours:40, mutuelle:78.77, hourly:35.04, day:269.11, week:1289.47, fortnight:2466.81, minimumMonthly:4858.87, month:4937.64 },
+  "c16": { weeklyHours:40, mutuelle:55.77, hourly:32.78, day:251.78, week:1206.46, fortnight:2308, minimumMonthly:4546.07, month:4601.84 },
+  "c17": { weeklyHours:15, mutuelle:92.77, hourly:39.44, day:113.59, week:544.3, fortnight:1041.27, minimumMonthly:2050.99, month:2143.76 },
+  "c18": { weeklyHours:40, mutuelle:55.77, hourly:28.62, day:219.76, week:1053.04, fortnight:2014.5, minimumMonthly:3967.96, month:4023.73 },
+  "c19": { weeklyHours:40, mutuelle:57.77, hourly:48.43, day:371.92, week:1782.13, fortnight:3409.29, minimumMonthly:6715.26, month:6773.03 },
+  "c20": { weeklyHours:40, mutuelle:57.77, hourly:48.43, day:371.92, week:1782.13, fortnight:3409.29, minimumMonthly:6715.26, month:6773.03 },
+};
+
+// Tarifs applicables à une date (AAAA-MM-JJ) : indexés à partir du 01/02/2027
+function ratesForDate(rates, ds) {
+  const base = rates || INITIAL_RATES;
+  return ds && ds >= RATE_INDEXATION_DATE ? { ...base, ...INDEXED_RATES } : base;
+}
 
 const RATES = { hourly:45, halfDay:180, fullDay:320, week:1400, fortnight:2600, month:4500 };
 
@@ -280,7 +318,6 @@ const INITIAL_MADS = [];
 
 // Enrichissement des collaborateurs existants (Ch.2)
 const COLLAB_EXTRA = {
-  "c1":  { jobCategory:"Opticienne remplacante", skills:["FOYER","ALEBA"],              sector:"Moselle",     sectorAlt:"Luxembourg", country:"France",     phone:"", email:"margauxm@jcf.lu",  comment:"CDI 02/06/2025 · 28h · 145,60h CP", status:"active", contractDate:"2025-06-02", cpHours:145.6, noWorkDays:[] },
   "c2":  { jobCategory:"Opticien diplome",       skills:["APEX","Depistage entreprise"],sector:"Lorraine",    sectorAlt:"Luxembourg", country:"France",     phone:"", email:"benjamin@jcf.lu",  comment:"CDI 02/09/2024 · 37h (avenant) · 192,40h CP", status:"active", contractDate:"2024-09-02", cpHours:192.4, noWorkDays:[] },
   "c3":  { jobCategory:"Opticienne remplacante", skills:["FOYER","GLOBUS","APEX"],      sector:"Luxembourg",  sectorAlt:"Lorraine",   country:"Luxembourg", phone:"", email:"dozkhaz@jcf.lu",   comment:"CDI 01/12/2024 · 40h · 208h CP · Vehicule · +350/an x2", status:"active", contractDate:"2024-12-01", cpHours:208, noWorkDays:[] },
   "c4":  { jobCategory:"Opticienne",             skills:["ALEBA"],                      sector:"Lorraine",    sectorAlt:"Luxembourg", country:"France",     phone:"", email:"mathilde@jcf.lu",   comment:"CDI 01/07/2024 · 35h · 182h CP", status:"active", contractDate:"2024-07-01", cpHours:182, noWorkDays:[] },
@@ -289,13 +326,16 @@ const COLLAB_EXTRA = {
   "c7":  { jobCategory:"Opticienne remplacante", skills:["FOYER","ONE LIFE"],           sector:"Luxembourg",  sectorAlt:"Lorraine",   country:"France",     phone:"", email:"abbi@jcf.lu",       comment:"CDI 01/05/2026 · 32h · 166,40h CP · Mercredi sur demande", status:"active", contractDate:"2026-05-01", cpHours:166.4, noWorkDays:[3] },
   "c8":  { jobCategory:"Opticienne remplacante", skills:["ALEBA","FOYER"],              sector:"Luxembourg",  sectorAlt:"Lorraine",   country:"France",     phone:"", email:"margauxk@jcf.lu",   comment:"CDI 23/06/2026 · 40h · 208h CP", status:"active", contractDate:"2026-06-23", cpHours:208, noWorkDays:[] },
   "c9":  { jobCategory:"Opticienne remplacante", skills:["GLOBUS","Depistage entreprise"],sector:"Lorraine",  sectorAlt:"Luxembourg", country:"France",     phone:"", email:"laurag@jcf.lu",     comment:"CDI 01/06/2026 · 32h · 166,40h CP · Mercredi sur demande", status:"active", contractDate:"2026-06-01", cpHours:166.4, noWorkDays:[3] },
-  "c10": { jobCategory:"Opticienne",             skills:["APEX","ONE LIFE"],            sector:"Grand Est",   sectorAlt:"Luxembourg", country:"France",     phone:"", email:"caroline@jcf.lu",    comment:"", status:"active", contractDate:"", cpHours:182, noWorkDays:[] },
   "c11": { jobCategory:"Opticienne Manager",     skills:["FOYER","GLOBUS","ONE LIFE"],  sector:"Luxembourg",  sectorAlt:"Lorraine",   country:"Luxembourg", phone:"", email:"juliew@jcf.lu",     comment:"CDI 05/08/2024 · 40h · 248h CP", status:"active", contractDate:"2024-08-05", cpHours:208.0, noWorkDays:[] },
   "c12": { jobCategory:"Vendeuse en optique",    skills:["FOYER","ALEBA"],              sector:"Luxembourg",  sectorAlt:"",           country:"Luxembourg", phone:"", email:"lucinda@jcf.lu",     comment:"", status:"active", contractDate:"", cpHours:166.4, noWorkDays:[] },
   "c13": { jobCategory:"Optometriste",           skills:["Depistage entreprise"],       sector:"Luxembourg",  sectorAlt:"",           country:"Luxembourg", phone:"", email:"valerie@jcf.lu",     comment:"CDI 01/10/2025 · 16h · 83,20h CP · Associee", status:"active", contractDate:"2025-10-01", cpHours:83.2, noWorkDays:[], special:"associate" },
   "c14": { jobCategory:"Responsable commercial", skills:["Depistage entreprise"],       sector:"Luxembourg",  sectorAlt:"",           country:"France",     phone:"", email:"guillaume@jcf.lu",    comment:"CDI 01/01/2026 · 16h/mois · 26j CP · 1200 net + 300 frais · Associe", status:"active", contractDate:"2026-01-01", cpHours:26, noWorkDays:[], special:"associate" },
   "c15": { jobCategory:"",                       skills:[],                             sector:"",            sectorAlt:"",           country:"Luxembourg", phone:"", email:"celineh@jcf.lu",     comment:"Profil a completer", status:"active", contractDate:"", cpHours:0, noWorkDays:[], special:"associate" },
   "c16": { jobCategory:"",                       skills:[],                             sector:"Lorraine",    sectorAlt:"",           country:"France",     phone:"", email:"guillaumeo@jcf.lu",  comment:"", status:"active", contractDate:"", cpHours:208, noWorkDays:[] },
+  "c17": { jobCategory:"", skills:[], sector:"", sectorAlt:"", country:"", phone:"", email:"jean@jcf.lu", comment:"", status:"active", contractDate:"", cpHours:0, noWorkDays:[] },
+  "c18": { jobCategory:"", skills:[], sector:"", sectorAlt:"", country:"", phone:"", email:"laetitia@jcf.lu", comment:"", status:"active", contractDate:"", cpHours:0, noWorkDays:[] },
+  "c19": { jobCategory:"", skills:[], sector:"", sectorAlt:"", country:"", phone:"", email:"nabil@jcf.lu", comment:"", status:"active", contractDate:"", cpHours:0, noWorkDays:[] },
+  "c20": { jobCategory:"", skills:[], sector:"", sectorAlt:"", country:"", phone:"", email:"ozgur@jcf.lu", comment:"", status:"active", contractDate:"", cpHours:0, noWorkDays:[] },
 };
 
 
@@ -355,7 +395,6 @@ const ACCOUNT_DIRECTORY = [
   { name:"Škoda Tour",     role:"store", login:"skodatour@jcf.lu",   locationId:"m16" },
 
   // Collaborateurs — [prenom]@jcf.lu
-  { name:"Margaux M",  role:"replacement", login:"margauxm@jcf.lu", collaboratorId:"c1"  },
   { name:"Benjamin",   role:"replacement", login:"benjamin@jcf.lu", collaboratorId:"c2"  },
   { name:"Dozkhaz",    role:"replacement", login:"dozkhaz@jcf.lu", collaboratorId:"c3"  },
   { name:"Mathilde",   role:"replacement", login:"mathilde@jcf.lu", collaboratorId:"c4"  },
@@ -364,13 +403,16 @@ const ACCOUNT_DIRECTORY = [
   { name:"ABBI",       role:"replacement", login:"abbi@jcf.lu", collaboratorId:"c7"  },
   { name:"Margaux K",  role:"replacement", login:"margauxk@jcf.lu", collaboratorId:"c8"  },
   { name:"Laura G",    role:"replacement", login:"laurag@jcf.lu", collaboratorId:"c9"  },
-  { name:"Caroline",   role:"replacement", login:"caroline@jcf.lu", collaboratorId:"c10" },
   { name:"Julie W",    role:"replacement", login:"juliew@jcf.lu", collaboratorId:"c11" },
   { name:"Lucinda",    role:"replacement", login:"lucinda@jcf.lu", collaboratorId:"c12" },
   { name:"Valerie",    role:"replacement", login:"valerie@jcf.lu", collaboratorId:"c13" },
   { name:"Guillaume",  role:"replacement", login:"guillaume@jcf.lu", collaboratorId:"c14" },
   { name:"Celine H",   role:"replacement", login:"celineh@jcf.lu", collaboratorId:"c15" },
   { name:"Guillaume O", role:"replacement", login:"guillaumeo@jcf.lu", collaboratorId:"c16" },
+  { name:"Jean M",      role:"replacement", login:"jean@jcf.lu", collaboratorId:"c17" },
+  { name:"Laetitia",    role:"replacement", login:"laetitia@jcf.lu", collaboratorId:"c18" },
+  { name:"Nabil",       role:"replacement", login:"nabil@jcf.lu", collaboratorId:"c19" },
+  { name:"Ozgür",       role:"replacement", login:"ozgur@jcf.lu", collaboratorId:"c20" },
 ];
 
 const TODAY = new Date().toISOString().split("T")[0];
@@ -488,7 +530,7 @@ function budgetAssignment(a, rates) {
     return (a.periodCost||0) + (a.hotelCost||0) + (a.repasCost||0) + (a.ouvertureCost||0);
   }
   // Pas de periodCost (vieilles affectations) : calcul horaire normal
-  const collabPart = estCollab(a.collaboratorId, a.hours, rates, a.bookingType);
+  const collabPart = estCollab(a.collaboratorId, a.hours, ratesForDate(rates, a.date), a.bookingType);
   return collabPart + (a.hotelCost||0) + (a.repasCost||0);
 }
 function calcCommercialCost(cId, bt, extra, rates) {
@@ -1641,7 +1683,8 @@ function ReservationModal({ collab, locationId, assignments, onClose, onConfirm,
   const [conflicts, setConflicts] = useState([]);
   const [skipConfl, setSkipConfl] = useState(false);
 
-  const r       = (rates || INITIAL_RATES)[collab.id] || {};
+  const rDate   = ratesForDate(rates, resType === "month" ? monthStr + "-01" : startDate);
+  const r       = rDate[collab.id] || {};
   const locName = (ALL_LOCATIONS.find(l => l.id===locationId) || {}).name || locationId;
 
   const candidateDates = useMemo(() => {
@@ -1659,8 +1702,8 @@ function ReservationModal({ collab, locationId, assignments, onClose, onConfirm,
   const availableDates = candidateDates.filter(ds => !conflictDates.includes(ds));
   const datesToBook    = skipConfl ? availableDates : candidateDates;
   const totalDays      = datesToBook.length;
-  const blockedHours   = calcBlockedHours(collab, resType, extraH, rates);
-  const collabCost     = calcCommercialCost(collab.id, resType, extraH, rates);
+  const blockedHours   = calcBlockedHours(collab, resType, extraH, rDate);
+  const collabCost     = calcCommercialCost(collab.id, resType, extraH, rDate);
   const hotelCost      = hotelNights * HOTEL_RATE;
   const repasCost      = repasSoirs * REPAS_RATE;
   const ouvertureCost  = ouverture ? OUVERTURE_RATE : 0;
@@ -1740,8 +1783,8 @@ function ReservationModal({ collab, locationId, assignments, onClose, onConfirm,
             <FormLabel text="Duree commerciale" />
             <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:12 }}>
               {COMMERCIAL_TYPES.map(ct => {
-                const bh   = calcBlockedHours(collab, ct.id, 0, rates);
-                const cost = calcCommercialCost(collab.id, ct.id, 0, rates);
+                const bh   = calcBlockedHours(collab, ct.id, 0, rDate);
+                const cost = calcCommercialCost(collab.id, ct.id, 0, rDate);
                 const sel  = resType === ct.id;
                 return (
                   <button key={ct.id}
@@ -2098,7 +2141,7 @@ function ReservationDetail({ assignment, rates, onClose, onCancel, onCancelLate 
   const now = new Date();
   const diffH = (d - now) / (1000 * 60 * 60);
   const isLate = diffH < 24 && diffH > -24;
-  const penalite = Math.round(estCollab(assignment.collaboratorId, assignment.hours, rates) * 0.30);
+  const penalite = Math.round(estCollab(assignment.collaboratorId, assignment.hours, ratesForDate(rates, assignment.date)) * 0.30);
 
   return (
     <div style={S.overlay} onClick={onClose}>
@@ -2285,7 +2328,7 @@ function StoreSpace({ user, onLogout, onRefresh, assignments, addAssignment, del
               // Utiliser periodCost si disponible, sinon tarif contractuel
               const collabBudget = g.periodCost > 0
                 ? g.periodCost
-                : calcCommercialCost(g.collaboratorId, rt, 0, rates);
+                : calcCommercialCost(g.collaboratorId, rt, 0, ratesForDate(rates, g.dates[0]));
               const totalFrais = (g.totalHotel||0) + (g.totalRepas||0) + (g.totalOuverture||0);
               const totalBudget = collabBudget + totalFrais;
               return (
@@ -2724,9 +2767,9 @@ function AdminDashboard({ assignments, setModal, rates }) {
   const absent = todayA.filter(a => !isWorkType(a.typeId));
   const noA    = COLLABORATORS.filter(c => !todayA.find(a => a.collaboratorId===c.id));
   const entToday = [...new Set(active.filter(a => isMission(a.locationId)).map(a => a.locationId))];
-  const caToday  = active.reduce((s,a) => s+estCollab(a.collaboratorId,a.hours,rates), 0);
+  const caToday  = active.reduce((s,a) => s+estCollab(a.collaboratorId,a.hours,ratesForDate(rates,a.date)), 0);
   const _mon = getCurrentMonday(); const _sun = (() => { const d=new Date(_mon+"T12:00:00"); d.setDate(d.getDate()+6); return d.toISOString().split("T")[0]; })();
-  const caWeek   = assignments.filter(a => a.date>=_mon && a.date<=_sun && isWorkType(a.typeId)).reduce((s,a) => s+estCollab(a.collaboratorId,a.hours,rates), 0);
+  const caWeek   = assignments.filter(a => a.date>=_mon && a.date<=_sun && isWorkType(a.typeId)).reduce((s,a) => s+estCollab(a.collaboratorId,a.hours,ratesForDate(rates,a.date)), 0);
   const mGroups  = groupMissions(todayA);
   const alerts   = COLLABORATORS.map(c => { const ph=calcHours(assignments.filter(a=>a.collaboratorId===c.id)); return ph>c.contract?{name:c.name,over:ph-c.contract}:null; }).filter(Boolean);
 
@@ -2825,7 +2868,7 @@ function groupMissions(assignments) {
 function MissionGroupCard({ group, rates }) {
   const collabs = group.assignments.map(a => COLLABORATORS.find(c => c.id===a.collaboratorId)).filter(Boolean);
   const totalH  = group.assignments.reduce((s,a) => s+a.hours, 0);
-  const ca      = group.assignments.reduce((s,a) => s+estCollab(a.collaboratorId,a.hours,rates), 0);
+  const ca      = group.assignments.reduce((s,a) => s+estCollab(a.collaboratorId,a.hours,ratesForDate(rates,a.date)), 0);
   const d       = new Date(group.date+"T12:00:00");
   const locName = (MISSIONS.find(m => m.id===group.locationId)||{}).name || group.locationId;
   const mCol    = MISSION_COLORS[locName] || "#1E2F4F";
@@ -3028,7 +3071,7 @@ function MissionsView({ assignments, rates }) {
   allGroups.forEach(g => { if (!byLoc[g.locationId]) byLoc[g.locationId]=[]; byLoc[g.locationId].push(g); });
 
   const totalMissions = allGroups.length;
-  const totalCA = allGroups.reduce((s,g) => s+g.assignments.reduce((s2,a)=>s2+estCollab(a.collaboratorId,a.hours,rates),0), 0);
+  const totalCA = allGroups.reduce((s,g) => s+g.assignments.reduce((s2,a)=>s2+estCollab(a.collaboratorId,a.hours,ratesForDate(rates,a.date)),0), 0);
 
   return (
     <div style={S.page}>
@@ -3686,6 +3729,12 @@ function RatesView({ rates, updateRate, collabExtras }) {
           <span style={{ color:"rgba(255,255,255,.6)", fontSize:12 }}>Minimum mensuel</span>
           <span style={{ fontWeight:600, color:"rgba(255,255,255,.7)", fontVariantNumeric:"tabular-nums" }}>{fmtEur(r.minimumMonthly||0)}</span>
         </div>
+        {INDEXED_RATES[selCollab] && (
+          <div style={{ display:"flex", justifyContent:"space-between", marginTop:4 }}>
+            <span style={{ color:"rgba(255,255,255,.6)", fontSize:12 }}>Tarif mensuel a partir du {fmtDateFR(RATE_INDEXATION_DATE)}</span>
+            <span style={{ fontWeight:600, color:"#D4AF37", fontVariantNumeric:"tabular-nums" }}>{fmtEur(INDEXED_RATES[selCollab].month)}</span>
+          </div>
+        )}
         <div style={{ fontSize:10, color:"rgba(255,255,255,.4)", marginTop:6 }}>CA estimatif — facturation finale manuelle par JCF Luxtalent</div>
       </div>
       <div style={{ height:24 }} />
@@ -3913,11 +3962,11 @@ function AssignmentModal({ modal, onClose, addAssignment, updateAssignment, dele
 
   // Estimation selon la période choisie
   const est = isWork ? (
-    periodeType === "day"       ? estCollab(collabId, hours, rates) :
-    periodeType === "week"      ? estCollab(collabId, hours, rates, "week") :
-    periodeType === "fortnight" ? estCollab(collabId, hours, rates, "fortnight") :
-    periodeType === "month"     ? estCollab(collabId, hours, rates, "month") :
-    estCollab(collabId, hours, rates) * datesToCreate.length  // période libre
+    periodeType === "day"       ? estCollab(collabId, hours, ratesForDate(rates, date)) :
+    periodeType === "week"      ? estCollab(collabId, hours, ratesForDate(rates, date), "week") :
+    periodeType === "fortnight" ? estCollab(collabId, hours, ratesForDate(rates, date), "fortnight") :
+    periodeType === "month"     ? estCollab(collabId, hours, ratesForDate(rates, date), "month") :
+    estCollab(collabId, hours, ratesForDate(rates, date)) * datesToCreate.length  // période libre
   ) : 0;
   const estTotal = isWork ? est : 0; // est est déjà le total pour la période
 
@@ -4970,7 +5019,8 @@ function CreateMadModal({ onClose, addMad, rates, partners, assignments }) {
   const REPAS_RATE = 18;  // €/soir
 
   const collab = COLLABORATORS.find(c=>c.id===collabId);
-  const r      = collab ? (rates||INITIAL_RATES)[collab.id]||{} : {};
+  const rDate  = ratesForDate(rates, bookType === "month" ? monthStr + "-01" : startDate);
+  const r      = collab ? rDate[collab.id]||{} : {};
 
   // Calcul dates
   const candidateDates = useMemo(() => {
@@ -4989,8 +5039,8 @@ function CreateMadModal({ onClose, addMad, rates, partners, assignments }) {
     candidateDates.filter(ds => assignments.some(a=>a.collaboratorId===collabId&&a.date===ds&&isWorkType(a.typeId))),
     [candidateDates, assignments, collabId]);
 
-  const blockedHours = collab ? calcBlockedHours(collab, bookType, extraH, rates) : 0;
-  const collabCost   = collab ? calcCommercialCost(collabId, bookType, extraH, rates) : 0;
+  const blockedHours = collab ? calcBlockedHours(collab, bookType, extraH, rDate) : 0;
+  const collabCost   = collab ? calcCommercialCost(collabId, bookType, extraH, rDate) : 0;
   const hotelCost    = hotelNights * HOTEL_RATE;
   const repasCost    = repasSoirs * REPAS_RATE;
   const totalCost    = collabCost + hotelCost + repasCost;
@@ -5096,8 +5146,8 @@ function CreateMadModal({ onClose, addMad, rates, partners, assignments }) {
             <FormLabel text="Duree commerciale" />
             <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:10 }}>
               {COMMERCIAL_TYPES.map(ct => {
-                const bh   = calcBlockedHours(collab, ct.id, 0, rates);
-                const cost = calcCommercialCost(collabId, ct.id, 0, rates);
+                const bh   = calcBlockedHours(collab, ct.id, 0, rDate);
+                const cost = calcCommercialCost(collabId, ct.id, 0, rDate);
                 const sel  = bookType===ct.id;
                 return (
                   <button key={ct.id} onClick={()=>{setBookType(ct.id);setExtraH(0);}}

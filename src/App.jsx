@@ -1,16 +1,66 @@
 import React from "react";
 import { useState, useMemo, useEffect } from "react";
+import { createClient } from "@supabase/supabase-js";
 
 
 // ─── Supabase ────────────────────────────────────────────────────────────────
 const SUPA_URL = "https://hwjuqtrdjcowgcvmhfed.supabase.co";
 const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh3anVxdHJkamNvd2djdm1oZmVkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIzODY5NDAsImV4cCI6MjA5Nzk2Mjk0MH0.2_sbmMTkGAnvffLlAsoLW8ZTy1nOpeNeGQtCg73q_bI";
 
+// Supabase Auth : la session (jeton) est conservée dans le navigateur et
+// rafraîchie automatiquement. Aucun mot de passe n'est stocké dans le code.
+const supabase = createClient(SUPA_URL, SUPA_KEY, {
+  auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:false },
+});
+
+// Identifiant de connexion : « pauline » ou « pauline@jcf.lu »
+const LOGIN_DOMAIN = "@jcf.lu";
+function normalizeLogin(v) {
+  const s = (v || "").trim().toLowerCase();
+  return s.includes("@") ? s : s + LOGIN_DOMAIN;
+}
+
+async function getAccessToken() {
+  const { data } = await supabase.auth.getSession();
+  return (data && data.session && data.session.access_token) || SUPA_KEY;
+}
+
+// Charge le profil (rôle, lieu, collaborateur) du compte connecté.
+// Renvoie null si le compte n'a pas de profil ou est désactivé.
+async function loadProfile(session) {
+  if (!session || !session.user) return null;
+  const { data, error } = await supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
+  if (error || !data || !data.active) return null;
+  return {
+    id: data.id,
+    name: data.display_name || data.login,
+    role: data.role,
+    email: data.login,
+    locationId: data.location_id || undefined,
+    collaboratorId: data.collaborator_id || undefined,
+  };
+}
+
+// Appel de l'Edge Function admin-users (création, réinitialisation, désactivation)
+async function adminUsers(payload) {
+  const token = await getAccessToken();
+  const res = await fetch(SUPA_URL + "/functions/v1/admin-users", {
+    method: "POST",
+    headers: { "apikey":SUPA_KEY, "Authorization":"Bearer " + token, "Content-Type":"application/json" },
+    body: JSON.stringify(payload),
+  });
+  let data = {};
+  try { data = await res.json(); } catch(e) {}
+  if (!res.ok || !data.ok) throw new Error(data.error || ("Erreur " + res.status));
+  return data;
+}
+
 async function supaFetch(table, method, body, filters) {
   const url = SUPA_URL + "/rest/v1/" + table + (filters ? "?" + filters : "");
+  const token = await getAccessToken();
   const headers = {
     "apikey": SUPA_KEY,
-    "Authorization": "Bearer " + SUPA_KEY,
+    "Authorization": "Bearer " + token,
     "Content-Type": "application/json",
     "Prefer": "return=representation",
   };
@@ -249,89 +299,79 @@ const COLLAB_EXTRA = {
 };
 
 
-// ── Convention comptes JCF OS ────────────────────────────────────────────────
-// Admin        : admin@jcf.lu          / admin123
-// Partenaires  : [ville]@jcf.lu        / store123   ex: luxembourg@jcf.lu
-// Collaborateurs: [prenom]@jcf.lu      / remp123    ex: sophie@jcf.lu
-// La convention est appliquee automatiquement a la creation.
+// ── Comptes JCF OS ───────────────────────────────────────────────────────────
+// Annuaire des comptes attendus, SANS mot de passe. Les comptes eux-mêmes
+// vivent dans Supabase Auth : l'admin les crée, réinitialise et désactive
+// depuis l'onglet « Comptes ». Aucun e-mail n'est envoyé (adresses fictives).
 // ─────────────────────────────────────────────────────────────────────────────
-
-const STORE_PASSWORD = "store123";
-const REMP_PASSWORD  = "remp123";
-
-const USERS = [
+const ACCOUNT_DIRECTORY = [
   // Admin
-  { id:"u1", name:"Jonathan",       role:"admin",       email:"admin@jcf.lu",       password:"admin123"      },
+  { name:"Jonathan",       role:"admin",       login:"admin@jcf.lu" },
 
-  // Partenaires — [ville]@jcf.lu / store123
-  { id:"u2",  name:"Luxembourg",      role:"store", email:"luxembourg@jcf.lu",  password:STORE_PASSWORD, locationId:"l12" },
-  { id:"u3",  name:"PAM",            role:"store", email:"pam@jcf.lu",         password:STORE_PASSWORD, locationId:"l1"  },
-  { id:"u4",  name:"Nancy centre",   role:"store", email:"nancy@jcf.lu",       password:STORE_PASSWORD, locationId:"l2"  },
-  { id:"u5",  name:"FOYER",          role:"store", email:"foyer@jcf.lu",       password:STORE_PASSWORD, locationId:"m4"  },
-  { id:"u21", name:"Mirecourt",      role:"store", email:"mirecourt@jcf.lu",   password:STORE_PASSWORD, locationId:"l20" },
-  { id:"u22", name:"Bazaine",        role:"store", email:"bazaine@jcf.lu",     password:STORE_PASSWORD, locationId:"l21" },
-  { id:"u23", name:"Jeuxey",         role:"store", email:"jeuxey@jcf.lu",      password:STORE_PASSWORD, locationId:"l22" },
-  { id:"u24", name:"Xertigny",       role:"store", email:"xertigny@jcf.lu",    password:STORE_PASSWORD, locationId:"l23" },
-  { id:"u25", name:"Betting",        role:"store", email:"betting@jcf.lu",     password:STORE_PASSWORD, locationId:"l24" },
-  { id:"u26", name:"Hettange",       role:"store", email:"hettange@jcf.lu",    password:STORE_PASSWORD, locationId:"l25" },
-  { id:"u27", name:"Clouange",       role:"store", email:"clouange@jcf.lu",    password:STORE_PASSWORD, locationId:"l26" },
-  { id:"u28", name:"Haguenau",       role:"store", email:"haguenau@jcf.lu",    password:STORE_PASSWORD, locationId:"l27" },
-  { id:"u29", name:"BIL",            role:"store", email:"bil@jcf.lu",         password:STORE_PASSWORD, locationId:"m8"  },
-  { id:"u30", name:"Raiffeisen",     role:"store", email:"raiffeisen@jcf.lu",  password:STORE_PASSWORD, locationId:"m9"  },
-  { id:"u31", name:"Post",           role:"store", email:"post@jcf.lu",        password:STORE_PASSWORD, locationId:"m10" },
-  { id:"u32", name:"Pulnoy",         role:"store", email:"pulnoy@jcf.lu",      password:STORE_PASSWORD, locationId:"l3"  },
-  { id:"u33", name:"Ludres",         role:"store", email:"ludres@jcf.lu",      password:STORE_PASSWORD, locationId:"l4"  },
-  { id:"u34", name:"Frouard",        role:"store", email:"frouard@jcf.lu",     password:STORE_PASSWORD, locationId:"l5"  },
-  { id:"u35", name:"Bouxieres",      role:"store", email:"bouxieres@jcf.lu",   password:STORE_PASSWORD, locationId:"l6"  },
-  { id:"u36", name:"St Avold",       role:"store", email:"stavold@jcf.lu",     password:STORE_PASSWORD, locationId:"l7"  },
-  { id:"u37", name:"Faulquemont",    role:"store", email:"faulquemont@jcf.lu", password:STORE_PASSWORD, locationId:"l8"  },
-  { id:"u38", name:"Longeville",     role:"store", email:"longeville@jcf.lu",  password:STORE_PASSWORD, locationId:"l9"  },
-  { id:"u39", name:"Fameck",         role:"store", email:"fameck@jcf.lu",      password:STORE_PASSWORD, locationId:"l10" },
-  { id:"u40", name:"Hagondange",     role:"store", email:"hagondange@jcf.lu",  password:STORE_PASSWORD, locationId:"l11" },
-  { id:"u41", name:"Revin",          role:"store", email:"revin@jcf.lu",       password:STORE_PASSWORD, locationId:"l13" },
-  { id:"u42", name:"Givet",          role:"store", email:"givet@jcf.lu",       password:STORE_PASSWORD, locationId:"l14" },
-  { id:"u43", name:"Sedan",          role:"store", email:"sedan@jcf.lu",       password:STORE_PASSWORD, locationId:"l15" },
-  { id:"u44", name:"Rethel",         role:"store", email:"rethel@jcf.lu",      password:STORE_PASSWORD, locationId:"l16" },
-  { id:"u45", name:"Reims",          role:"store", email:"reims@jcf.lu",       password:STORE_PASSWORD, locationId:"l17" },
-  { id:"u46", name:"Epinal",         role:"store", email:"epinal@jcf.lu",      password:STORE_PASSWORD, locationId:"l18" },
-  { id:"u47", name:"Charmes",        role:"store", email:"charmes@jcf.lu",     password:STORE_PASSWORD, locationId:"l19" },
-  { id:"u48", name:"APEX",           role:"store", email:"apex@jcf.lu",        password:STORE_PASSWORD, locationId:"m3"  },
-  { id:"u49", name:"ALEBA",          role:"store", email:"aleba@jcf.lu",       password:STORE_PASSWORD, locationId:"m2"  },
-  { id:"u50", name:"GLOBUS",         role:"store", email:"globus@jcf.lu",      password:STORE_PASSWORD, locationId:"m5"  },
-  { id:"u51", name:"ONE LIFE",       role:"store", email:"onelife@jcf.lu",     password:STORE_PASSWORD, locationId:"m6"  },
-  { id:"u52", name:"Toul",           role:"store", email:"toul@jcf.lu",        password:STORE_PASSWORD, locationId:"l28" },
+  // Magasins et partenaires — [lieu]@jcf.lu
+  { name:"Luxembourg",      role:"store", login:"luxembourg@jcf.lu", locationId:"l12" },
+  { name:"PAM",            role:"store", login:"pam@jcf.lu", locationId:"l1"  },
+  { name:"Nancy centre",   role:"store", login:"nancy@jcf.lu", locationId:"l2"  },
+  { name:"FOYER",          role:"store", login:"foyer@jcf.lu", locationId:"m4"  },
+  { name:"Mirecourt",      role:"store", login:"mirecourt@jcf.lu", locationId:"l20" },
+  { name:"Bazaine",        role:"store", login:"bazaine@jcf.lu", locationId:"l21" },
+  { name:"Jeuxey",         role:"store", login:"jeuxey@jcf.lu", locationId:"l22" },
+  { name:"Xertigny",       role:"store", login:"xertigny@jcf.lu", locationId:"l23" },
+  { name:"Betting",        role:"store", login:"betting@jcf.lu", locationId:"l24" },
+  { name:"Hettange",       role:"store", login:"hettange@jcf.lu", locationId:"l25" },
+  { name:"Clouange",       role:"store", login:"clouange@jcf.lu", locationId:"l26" },
+  { name:"Haguenau",       role:"store", login:"haguenau@jcf.lu", locationId:"l27" },
+  { name:"BIL",            role:"store", login:"bil@jcf.lu", locationId:"m8"  },
+  { name:"Raiffeisen",     role:"store", login:"raiffeisen@jcf.lu", locationId:"m9"  },
+  { name:"Post",           role:"store", login:"post@jcf.lu", locationId:"m10" },
+  { name:"Pulnoy",         role:"store", login:"pulnoy@jcf.lu", locationId:"l3"  },
+  { name:"Ludres",         role:"store", login:"ludres@jcf.lu", locationId:"l4"  },
+  { name:"Frouard",        role:"store", login:"frouard@jcf.lu", locationId:"l5"  },
+  { name:"Bouxieres",      role:"store", login:"bouxieres@jcf.lu", locationId:"l6"  },
+  { name:"St Avold",       role:"store", login:"stavold@jcf.lu", locationId:"l7"  },
+  { name:"Faulquemont",    role:"store", login:"faulquemont@jcf.lu", locationId:"l8"  },
+  { name:"Longeville",     role:"store", login:"longeville@jcf.lu", locationId:"l9"  },
+  { name:"Fameck",         role:"store", login:"fameck@jcf.lu", locationId:"l10" },
+  { name:"Hagondange",     role:"store", login:"hagondange@jcf.lu", locationId:"l11" },
+  { name:"Revin",          role:"store", login:"revin@jcf.lu", locationId:"l13" },
+  { name:"Givet",          role:"store", login:"givet@jcf.lu", locationId:"l14" },
+  { name:"Sedan",          role:"store", login:"sedan@jcf.lu", locationId:"l15" },
+  { name:"Rethel",         role:"store", login:"rethel@jcf.lu", locationId:"l16" },
+  { name:"Reims",          role:"store", login:"reims@jcf.lu", locationId:"l17" },
+  { name:"Epinal",         role:"store", login:"epinal@jcf.lu", locationId:"l18" },
+  { name:"Charmes",        role:"store", login:"charmes@jcf.lu", locationId:"l19" },
+  { name:"APEX",           role:"store", login:"apex@jcf.lu", locationId:"m3"  },
+  { name:"ALEBA",          role:"store", login:"aleba@jcf.lu", locationId:"m2"  },
+  { name:"GLOBUS",         role:"store", login:"globus@jcf.lu", locationId:"m5"  },
+  { name:"ONE LIFE",       role:"store", login:"onelife@jcf.lu", locationId:"m6"  },
+  { name:"Toul",           role:"store", login:"toul@jcf.lu", locationId:"l28" },
 
-  // Collaborateurs — [prenom]@jcf.lu / remp123
-  { id:"u6",  name:"Margaux M",  role:"replacement", email:"margauxm@jcf.lu",  password:REMP_PASSWORD, collaboratorId:"c1"  },
-  { id:"u7",  name:"Benjamin",   role:"replacement", email:"benjamin@jcf.lu",  password:REMP_PASSWORD, collaboratorId:"c2"  },
-  { id:"u8",  name:"Dozkhaz",    role:"replacement", email:"dozkhaz@jcf.lu",   password:REMP_PASSWORD, collaboratorId:"c3"  },
-  { id:"u9",  name:"Mathilde",   role:"replacement", email:"mathilde@jcf.lu",  password:REMP_PASSWORD, collaboratorId:"c4"  },
-  { id:"u10", name:"Pauline",    role:"replacement", email:"pauline@jcf.lu",   password:REMP_PASSWORD, collaboratorId:"c5"  },
-  { id:"u11", name:"Laura S",    role:"replacement", email:"lauras@jcf.lu",    password:REMP_PASSWORD, collaboratorId:"c6"  },
-  { id:"u12", name:"ABBI",       role:"replacement", email:"abbi@jcf.lu",      password:REMP_PASSWORD, collaboratorId:"c7"  },
-  { id:"u13", name:"Margaux K",  role:"replacement", email:"margauxk@jcf.lu",  password:REMP_PASSWORD, collaboratorId:"c8"  },
-  { id:"u14", name:"Laura G",    role:"replacement", email:"laurag@jcf.lu",    password:REMP_PASSWORD, collaboratorId:"c9"  },
-  { id:"u15", name:"Caroline",   role:"replacement", email:"caroline@jcf.lu",  password:REMP_PASSWORD, collaboratorId:"c10" },
-  { id:"u16", name:"Julie W",    role:"replacement", email:"juliew@jcf.lu",    password:REMP_PASSWORD, collaboratorId:"c11" },
-  { id:"u17", name:"Lucinda",    role:"replacement", email:"lucinda@jcf.lu",   password:REMP_PASSWORD, collaboratorId:"c12" },
-  { id:"u18", name:"Valerie",    role:"replacement", email:"valerie@jcf.lu",   password:REMP_PASSWORD, collaboratorId:"c13" },
-  { id:"u19", name:"Guillaume",  role:"replacement", email:"guillaume@jcf.lu", password:REMP_PASSWORD, collaboratorId:"c14" },
-  { id:"u20", name:"Celine H",   role:"replacement", email:"celineh@jcf.lu",   password:REMP_PASSWORD, collaboratorId:"c15" },
-  { id:"u53", name:"Guillaume O", role:"replacement", email:"guillaumeo@jcf.lu", password:REMP_PASSWORD, collaboratorId:"c16" },
+  // Nouvelles structures (comptes créés directement dans Supabase Auth)
+  { name:"Päiperléck",     role:"store", login:"paiperleck@jcf.lu",  locationId:"m11" },
+  { name:"Ginkgo",         role:"store", login:"ginko@jcf.lu",       locationId:"m12" },
+  { name:"Indosuez",       role:"store", login:"indosuez@jcf.lu",    locationId:"m13" },
+  { name:"Van Mossel",     role:"store", login:"vanmossel@jcf.lu",   locationId:"m14" },
+  { name:"Orange",         role:"store", login:"orange@jcf.lu",      locationId:"m15" },
+  { name:"Škoda Tour",     role:"store", login:"skodatour@jcf.lu",   locationId:"m16" },
+
+  // Collaborateurs — [prenom]@jcf.lu
+  { name:"Margaux M",  role:"replacement", login:"margauxm@jcf.lu", collaboratorId:"c1"  },
+  { name:"Benjamin",   role:"replacement", login:"benjamin@jcf.lu", collaboratorId:"c2"  },
+  { name:"Dozkhaz",    role:"replacement", login:"dozkhaz@jcf.lu", collaboratorId:"c3"  },
+  { name:"Mathilde",   role:"replacement", login:"mathilde@jcf.lu", collaboratorId:"c4"  },
+  { name:"Pauline",    role:"replacement", login:"pauline@jcf.lu", collaboratorId:"c5"  },
+  { name:"Laura S",    role:"replacement", login:"lauras@jcf.lu", collaboratorId:"c6"  },
+  { name:"ABBI",       role:"replacement", login:"abbi@jcf.lu", collaboratorId:"c7"  },
+  { name:"Margaux K",  role:"replacement", login:"margauxk@jcf.lu", collaboratorId:"c8"  },
+  { name:"Laura G",    role:"replacement", login:"laurag@jcf.lu", collaboratorId:"c9"  },
+  { name:"Caroline",   role:"replacement", login:"caroline@jcf.lu", collaboratorId:"c10" },
+  { name:"Julie W",    role:"replacement", login:"juliew@jcf.lu", collaboratorId:"c11" },
+  { name:"Lucinda",    role:"replacement", login:"lucinda@jcf.lu", collaboratorId:"c12" },
+  { name:"Valerie",    role:"replacement", login:"valerie@jcf.lu", collaboratorId:"c13" },
+  { name:"Guillaume",  role:"replacement", login:"guillaume@jcf.lu", collaboratorId:"c14" },
+  { name:"Celine H",   role:"replacement", login:"celineh@jcf.lu", collaboratorId:"c15" },
+  { name:"Guillaume O", role:"replacement", login:"guillaumeo@jcf.lu", collaboratorId:"c16" },
 ];
-
-// Genere automatiquement un compte partenaire selon la convention
-// Usage : generateStoreUser("reims", "l17", existingUsers.length)
-function generateStoreUser(ville, locationId, index) {
-  return {
-    id:         "u" + (index + 1),
-    name:       ville.charAt(0).toUpperCase() + ville.slice(1),
-    role:       "store",
-    email:      ville.toLowerCase().replace(/\s+/g,"")+"@jcf.lu",
-    password:   STORE_PASSWORD,
-    locationId: locationId,
-  };
-}
 
 const TODAY = new Date().toISOString().split("T")[0];
 function getWeekDays(mondayStr) {
@@ -483,30 +523,76 @@ export default function App() {
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const loadAllData = async (showLoading) => {
+  // Données chargées selon le rôle (les règles RLS filtrent côté base) :
+  //  admin       → tout
+  //  magasin     → ses réservations + créneaux occupés des collaborateurs (sans coûts)
+  //  collaborateur → son planning + ses demandes + créneaux de l'équipe (sans coûts)
+  const loadAllData = async (showLoading, forUser) => {
+    const u = forUser || user;
+    if (!u) return;
     if (showLoading) setLoading(true);
     try {
-      const [asgRows, madRows, cpRows, cssRows] = await Promise.all([
-        supaFetch("assignments", "GET", null, "order=date.asc"),
-        supaFetch("mads", "GET", null, "order=created_at.desc"),
-        supaFetch("cp_requests", "GET", null, "type=eq.cp&order=created_at.desc"),
-        supaFetch("cp_requests", "GET", null, "type=eq.css&order=created_at.desc"),
-      ]);
-      if (asgRows && Array.isArray(asgRows))  setAssignments(asgRows.map(rowToAsg));
-      if (madRows && Array.isArray(madRows))  setMads(madRows.map(rowToMad));
-      if (cpRows  && Array.isArray(cpRows))   setCpRequests(cpRows.map(rowToCp));
-      if (cssRows && Array.isArray(cssRows))  setCssRequests(cssRows.map(rowToCp));
+      if (u.role === "admin") {
+        const [asgRows, madRows, cpRows, cssRows] = await Promise.all([
+          supaFetch("assignments", "GET", null, "order=date.asc"),
+          supaFetch("mads", "GET", null, "order=created_at.desc"),
+          supaFetch("cp_requests", "GET", null, "type=eq.cp&order=created_at.desc"),
+          supaFetch("cp_requests", "GET", null, "type=eq.css&order=created_at.desc"),
+        ]);
+        if (asgRows && Array.isArray(asgRows))  setAssignments(asgRows.map(rowToAsg));
+        if (madRows && Array.isArray(madRows))  setMads(madRows.map(rowToMad));
+        if (cpRows  && Array.isArray(cpRows))   setCpRequests(cpRows.map(rowToCp));
+        if (cssRows && Array.isArray(cssRows))  setCssRequests(cssRows.map(rowToCp));
+      } else {
+        const isRepl = u.role === "replacement";
+        const [asgRows, sharedRows, cpRows, cssRows] = await Promise.all([
+          supaFetch("assignments", "GET", null, "order=date.asc"),
+          supaFetch("rpc/jcf_shared_planning", "POST", {}),
+          isRepl ? supaFetch("cp_requests", "GET", null, "type=eq.cp&order=created_at.desc")  : Promise.resolve([]),
+          isRepl ? supaFetch("cp_requests", "GET", null, "type=eq.css&order=created_at.desc") : Promise.resolve([]),
+        ]);
+        if (asgRows && Array.isArray(asgRows)) {
+          const own = asgRows.map(rowToAsg);
+          const ownIds = new Set(own.map(a => a.id));
+          const shared = (Array.isArray(sharedRows) ? sharedRows : []).filter(r => !ownIds.has(r.id)).map(rowToAsg);
+          setAssignments([...own, ...shared].sort((a,b) => a.date.localeCompare(b.date)));
+        }
+        if (cpRows  && Array.isArray(cpRows))   setCpRequests(cpRows.map(rowToCp));
+        if (cssRows && Array.isArray(cssRows))  setCssRequests(cssRows.map(rowToCp));
+      }
     } catch(e) { console.error("Supabase load error:", e); }
     finally { if (showLoading) setLoading(false); }
   };
 
   const refreshData = () => loadAllData(false);
 
+  // Reprise de session au démarrage (l'utilisateur reste connecté)
   useEffect(() => {
-    loadAllData(true);
-    const interval = setInterval(() => loadAllData(false), 60000);
-    return () => clearInterval(interval);
+    let cancelled = false;
+    supabase.auth.getSession().then(async ({ data }) => {
+      const u = await loadProfile(data && data.session);
+      if (cancelled) return;
+      if (u) setUser(u); else setLoading(false);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") setUser(null);
+    });
+    return () => { cancelled = true; sub.subscription.unsubscribe(); };
   }, []);
+
+  // Chargement des données une fois connecté, puis toutes les 60 s
+  useEffect(() => {
+    if (!user) return;
+    loadAllData(true, user);
+    const interval = setInterval(() => loadAllData(false, user), 60000);
+    return () => clearInterval(interval);
+  }, [user && user.id]);
+
+  const logout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setAssignments([]); setMads([]); setCpRequests([]); setCssRequests([]);
+  };
   const [rates, setRates]             = useState(INITIAL_RATES);
   // Donnees editables — etat React propagé partout
   const [dynCollaborators, setDynCollaborators] = useState(COLLABORATORS);
@@ -643,12 +729,11 @@ export default function App() {
   };
 
   // Ajout d'un nouveau collaborateur dans le state
-  const [dynUsers, setDynUsers] = useState(USERS);
+  // (son compte de connexion se crée dans l'onglet « Comptes »)
   const addCollaborator = (collab, extra, rateData) => {
     setDynCollaborators(p => [...p, collab]);
     setCollabExtras(p => ({ ...p, [collab.id]: extra }));
     setRates(p => ({ ...p, [collab.id]: rateData }));
-    setDynUsers(p => [...p, { id:"u-"+Date.now(), name:collab.name, role:"replacement", email:extra.email, password:"remp123", collaboratorId:collab.id }]);
   };
 
   // Mise a jour d'un champ partenaire
@@ -666,14 +751,14 @@ export default function App() {
   }
 
   if (!user) {
-    return (<LoginScreen onLogin={setUser} dynUsers={dynUsers} />);
+    return (<LoginScreen onLogin={setUser} />);
   }
 
   const props = { assignments, addAssignment, updateAssignment, deleteAssignment, rates, collabExtras, updateCollabExtra, partners, updatePartner, mads, addMad, updateMad, deleteMad, dynCollaborators, addCollaborator };
 
-  if (user.role === "admin")       return (<AdminSpace       user={user} onLogout={() => setUser(null)} {...props} updateRate={updateRate} cpRequests={cpRequests} validateCpRequest={validateCpRequest} refuseCpRequest={refuseCpRequest} cssRequests={cssRequests} validateCssRequest={validateCssRequest} refuseCssRequest={refuseCssRequest} onRefresh={refreshData} />);
-  if (user.role === "store")       return (<StoreSpace       user={user} onLogout={() => setUser(null)} {...props} onRefresh={refreshData} />);
-  if (user.role === "replacement") return (<ReplacementSpace user={user} onLogout={() => setUser(null)} {...props} addCpRequest={addCpRequest} cpRequests={cpRequests} addCssRequest={addCssRequest} cssRequests={cssRequests} onRefresh={refreshData} />);
+  if (user.role === "admin")       return (<AdminSpace       user={user} onLogout={logout} {...props} updateRate={updateRate} cpRequests={cpRequests} validateCpRequest={validateCpRequest} refuseCpRequest={refuseCpRequest} cssRequests={cssRequests} validateCssRequest={validateCssRequest} refuseCssRequest={refuseCssRequest} onRefresh={refreshData} />);
+  if (user.role === "store")       return (<StoreSpace       user={user} onLogout={logout} {...props} onRefresh={refreshData} />);
+  if (user.role === "replacement") return (<ReplacementSpace user={user} onLogout={logout} {...props} addCpRequest={addCpRequest} cpRequests={cpRequests} addCssRequest={addCssRequest} cssRequests={cssRequests} onRefresh={refreshData} />);
   return null;
 }
 
@@ -1130,15 +1215,31 @@ function Chapter2({ onDone }) {
 // ════════════════════════════════════════════════════════════
 // LOGIN
 // ════════════════════════════════════════════════════════════
-function LoginScreen({ onLogin, dynUsers }) {
+function LoginScreen({ onLogin }) {
   const [email,  setEmail]  = useState("");
   const [pwd,    setPwd]    = useState("");
   const [err,    setErr]    = useState("");
+  const [busy,   setBusy]   = useState(false);
 
-  const submit = e => {
+  const submit = async e => {
     e.preventDefault();
-    const u = (dynUsers||USERS).find(u => u.email === email && u.password === pwd);
-    if (u) onLogin(u); else setErr("Identifiants incorrects");
+    if (busy) return;
+    setErr(""); setBusy(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email: normalizeLogin(email), password: pwd });
+      if (error || !data || !data.session) { setErr("Identifiant ou mot de passe incorrect"); return; }
+      const u = await loadProfile(data.session);
+      if (!u) {
+        await supabase.auth.signOut();
+        setErr("Compte desactive ou non configure. Contactez l'administrateur.");
+        return;
+      }
+      onLogin(u);
+    } catch(ex) {
+      setErr("Connexion impossible. Verifiez votre reseau.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -1162,22 +1263,22 @@ function LoginScreen({ onLogin, dynUsers }) {
         <div style={{ background:"#ffffff", borderRadius:16, padding:28, boxShadow:"0 8px 32px rgba(0,0,0,.25)" }}>
           <form onSubmit={submit} style={{ display:"flex", flexDirection:"column", gap:14 }}>
             <div>
-              <label style={{ display:"block", fontSize:11, fontWeight:600, color:"#6B7280", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.5px" }}>Email</label>
+              <label style={{ display:"block", fontSize:11, fontWeight:600, color:"#6B7280", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.5px" }}>Identifiant</label>
               <input
                 style={{ width:"100%", border:"1.5px solid #E5E7EB", borderRadius:10, padding:"11px 13px", fontSize:13, color:"#2C2C2C", background:"#F8F9FB", boxSizing:"border-box" }}
-                type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="votre@email.com"
+                type="text" autoComplete="username" autoCapitalize="none" value={email} onChange={e => setEmail(e.target.value)} placeholder="prenom ou prenom@jcf.lu"
               />
             </div>
             <div>
               <label style={{ display:"block", fontSize:11, fontWeight:600, color:"#6B7280", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.5px" }}>Mot de passe</label>
               <input
                 style={{ width:"100%", border:"1.5px solid #E5E7EB", borderRadius:10, padding:"11px 13px", fontSize:13, color:"#2C2C2C", background:"#F8F9FB", boxSizing:"border-box" }}
-                type="password" value={pwd} onChange={e => setPwd(e.target.value)} placeholder="••••••••"
+                type="password" autoComplete="current-password" value={pwd} onChange={e => setPwd(e.target.value)} placeholder="••••••••"
               />
             </div>
             {err && <p style={{ color:"#C0392B", fontSize:12, textAlign:"center", margin:0 }}>{err}</p>}
-            <button type="submit" style={{ background:"#D4AF37", color:"#1E2F4F", border:"none", borderRadius:10, padding:"13px", fontWeight:700, fontSize:14, cursor:"pointer", marginTop:4 }}>
-              Acceder
+            <button type="submit" style={{ background:"#D4AF37", color:"#1E2F4F", border:"none", borderRadius:10, padding:"13px", fontWeight:700, fontSize:14, cursor:"pointer", marginTop:4, opacity:busy?0.6:1 }} disabled={busy}>
+              {busy ? "Connexion..." : "Acceder"}
             </button>
           </form>
 
@@ -1187,6 +1288,7 @@ function LoginScreen({ onLogin, dynUsers }) {
               { l:"Admin",        h:"admin@jcf.lu"      },
               { l:"Partenaire",   h:"[ville]@jcf.lu"    },
               { l:"Collaborateur",h:"[prenom]@jcf.lu"   },
+              { l:"Mot de passe oublie", h:"contactez l'administrateur" },
             ].map(d => (
               <div key={d.l} style={{ display:"flex", justifyContent:"space-between", padding:"5px 0", borderBottom:"1px solid #F8F9FB" }}>
                 <span style={{ fontSize:11, color:"#1E2F4F", fontWeight:600 }}>{d.l}</span>
@@ -1221,6 +1323,7 @@ function AdminSpace({ user, onLogout, onRefresh, assignments, addAssignment, upd
     { id:"hours",         icon:"\u23F1",        label:"Heures"     },
     { id:"ca",            icon:"\uD83D\uDCC8", label:"CA"         },
     { id:"rates",         icon:"\uD83D\uDCB6", label:"Tarifs"     },
+    { id:"accounts",      icon:"\uD83D\uDD10", label:"Comptes"    },
     { id:"settings",      icon:"\u2699",        label:"Config"     },
   ];
 
@@ -1254,10 +1357,262 @@ function AdminSpace({ user, onLogout, onRefresh, assignments, addAssignment, upd
         {tab==="hours"         && <HoursView         assignments={assignments} rates={rates} collabExtras={collabExtras} />}
         {tab==="ca"            && <CaDetailView      assignments={assignments} rates={rates} />}
         {tab==="rates"         && <RatesView         rates={rates} updateRate={updateRate} collabExtras={collabExtras} />}
+        {tab==="accounts"      && <AccountsView      user={user} dynCollaborators={dynCollaborators} collabExtras={collabExtras} />}
         {tab==="settings"      && <SettingsView />}
       </div>
       <BottomNav tabs={tabs} active={tab} onChange={setTab} />
       {modal && <AssignmentModal modal={modal} onClose={() => setModal(null)} {...props} />}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+// ESPACE ADMIN — COMPTES (Supabase Auth)
+// ════════════════════════════════════════════════════════════
+// L'admin crée les comptes avec un mot de passe qu'il définit, les
+// réinitialise et les désactive. Aucun e-mail n'est jamais envoyé.
+const ROLE_LABELS = { admin:"Admin", store:"Magasin / partenaire", replacement:"Collaborateur" };
+const MIN_PASSWORD = 10;
+
+function AccountsView({ user, dynCollaborators, collabExtras }) {
+  const [profiles, setProfiles] = useState([]);
+  const [loadingP, setLoadingP] = useState(true);
+  const [loadErr,  setLoadErr]  = useState("");
+  const [filter,   setFilter]   = useState("all"); // "all" | "todo" | "active" | "inactive"
+  const [search,   setSearch]   = useState("");
+  const [form,     setForm]     = useState(null);  // { mode:"create"|"reset", entry }
+  const [notice,   setNotice]   = useState("");
+
+  const reload = async () => {
+    setLoadingP(true); setLoadErr("");
+    const rows = await supaFetch("profiles", "GET", null, "order=login.asc");
+    if (Array.isArray(rows)) setProfiles(rows); else setLoadErr("Impossible de charger les comptes.");
+    setLoadingP(false);
+  };
+  useEffect(() => { reload(); }, []);
+
+  // Comptes attendus (annuaire + collaborateurs ajoutés) croisés avec les comptes existants
+  const entries = useMemo(() => {
+    const expected = [...ACCOUNT_DIRECTORY];
+    const known = new Set(expected.map(e => e.login));
+    (dynCollaborators || []).forEach(c => {
+      const login = (((collabExtras || {})[c.id] || {}).email || "").toLowerCase();
+      if (login.endsWith(LOGIN_DOMAIN) && !known.has(login)) {
+        expected.push({ name:c.name, role:"replacement", login, collaboratorId:c.id });
+        known.add(login);
+      }
+    });
+    const byLogin = {};
+    profiles.forEach(p => { byLogin[p.login] = p; });
+    const list = expected.map(e => ({ ...e, profile: byLogin[e.login] || null }));
+    profiles.forEach(p => {
+      if (!known.has(p.login)) list.push({ name:p.display_name || p.login, role:p.role, login:p.login, locationId:p.location_id, collaboratorId:p.collaborator_id, profile:p, extra:true });
+    });
+    return list;
+  }, [profiles, dynCollaborators, collabExtras]);
+
+  const statusOf = e => !e.profile ? "todo" : (e.profile.active ? "active" : "inactive");
+  const counts = { todo:0, active:0, inactive:0 };
+  entries.forEach(e => { counts[statusOf(e)]++; });
+
+  const q = search.trim().toLowerCase();
+  const shown = entries.filter(e =>
+    (filter === "all" || statusOf(e) === filter) &&
+    (!q || e.name.toLowerCase().includes(q) || e.login.includes(q)));
+
+  const toggleActive = async (e) => {
+    const next = !e.profile.active;
+    if (!next && !window.confirm("Desactiver le compte " + e.login + " ? La personne ne pourra plus se connecter.")) return;
+    setNotice("");
+    try {
+      await adminUsers({ action:"set_active", user_id:e.profile.id, active:next });
+      setNotice((next ? "Compte reactive : " : "Compte desactive : ") + e.login);
+      reload();
+    } catch(err) { setNotice("Erreur : " + err.message); }
+  };
+
+  const badge = st => st === "todo"
+    ? <StatusTag label="A creer"   color="#B45309" bg="#FFFBEB" />
+    : st === "active"
+      ? <StatusTag label="Actif"     color="#2E8B57" bg="#ECFDF5" />
+      : <StatusTag label="Desactive" color="#C0392B" bg="#FEF2F2" />;
+
+  const linkLabel = e => e.role === "store"
+    ? getLocName(e.locationId)
+    : e.role === "replacement"
+      ? (((dynCollaborators || []).find(c => c.id === e.collaboratorId) || {}).name || e.collaboratorId)
+      : "";
+
+  return (
+    <div style={S.page}>
+      <SectionTitle title="Comptes" sub={counts.active + " actifs · " + counts.todo + " a creer · " + counts.inactive + " desactives"} />
+
+      <div style={{ padding:"0 16px 8px" }}>
+        <input style={S.input} value={search} onChange={e => setSearch(e.target.value)} placeholder="Rechercher un nom ou un identifiant" />
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:8 }}>
+          {[["all","Tous"],["todo","A creer"],["active","Actifs"],["inactive","Desactives"]].map(([id,l]) => (
+            <button key={id} onClick={() => setFilter(id)}
+              style={{ ...S.btn, padding:"6px 12px", fontSize:11, background:filter===id?"#1E2F4F":"#F1F3F6", color:filter===id?"#ffffff":"#1E2F4F" }}>{l}</button>
+          ))}
+          <button onClick={() => setForm({ mode:"create", entry:null })}
+            style={{ ...S.btnGold, padding:"6px 12px", fontSize:11, marginLeft:"auto" }}>+ Autre compte</button>
+        </div>
+        {notice && <div style={{ fontSize:12, color:notice.startsWith("Erreur")?"#C0392B":"#2E8B57", marginBottom:8 }}>{notice}</div>}
+        {loadErr && <div style={{ fontSize:12, color:"#C0392B", marginBottom:8 }}>{loadErr}</div>}
+      </div>
+
+      {loadingP ? <Empty text="Chargement des comptes..." /> : (
+        <div style={S.cardList}>
+          {shown.length === 0 && <Empty text="Aucun compte" />}
+          {shown.map(e => {
+            const st = statusOf(e);
+            const isMe = e.profile && e.profile.id === user.id;
+            return (
+              <div key={e.login} style={{ ...S.card, flexDirection:"column", alignItems:"stretch", gap:8 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontWeight:700, fontSize:13, color:"#1E2F4F" }}>{e.name}{isMe ? " (vous)" : ""}</div>
+                    <div style={{ fontSize:11, color:"#6B7280", wordBreak:"break-all" }}>{e.login}</div>
+                    <div style={{ fontSize:10, color:"#9CA3AF" }}>{ROLE_LABELS[e.role] || e.role}{linkLabel(e) ? " · " + linkLabel(e) : ""}{e.extra ? " · hors annuaire" : ""}</div>
+                  </div>
+                  {badge(st)}
+                </div>
+                <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                  {st === "todo" && (
+                    <button style={{ ...S.btnGold, padding:"6px 12px", fontSize:11 }} onClick={() => setForm({ mode:"create", entry:e })}>Creer le compte</button>
+                  )}
+                  {st !== "todo" && (
+                    <button style={{ ...S.btn, padding:"6px 12px", fontSize:11, background:"#F1F3F6", color:"#1E2F4F" }} onClick={() => setForm({ mode:"reset", entry:e })}>Nouveau mot de passe</button>
+                  )}
+                  {st !== "todo" && !isMe && (
+                    <button style={{ ...S.btn, padding:"6px 12px", fontSize:11, background:st==="active"?"#FEF2F2":"#ECFDF5", color:st==="active"?"#C0392B":"#2E8B57" }} onClick={() => toggleActive(e)}>
+                      {st === "active" ? "Desactiver" : "Reactiver"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {form && (
+        <AccountFormModal
+          mode={form.mode}
+          entry={form.entry}
+          dynCollaborators={dynCollaborators}
+          onClose={() => setForm(null)}
+          onDone={msg => { setForm(null); setNotice(msg); reload(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function AccountFormModal({ mode, entry, dynCollaborators, onClose, onDone }) {
+  const free = mode === "create" && !entry;
+  const [login,  setLogin]  = useState(entry ? entry.login : "");
+  const [name,   setName]   = useState(entry ? entry.name  : "");
+  const [role,   setRole]   = useState(entry ? entry.role  : "store");
+  const [locId,  setLocId]  = useState(entry && entry.locationId ? entry.locationId : ALL_LOCATIONS[0].id);
+  const [colId,  setColId]  = useState(entry && entry.collaboratorId ? entry.collaboratorId : ((dynCollaborators || [])[0] || {}).id || "");
+  const [pwd,    setPwd]    = useState("");
+  const [pwd2,   setPwd2]   = useState("");
+  const [show,   setShow]   = useState(false);
+  const [err,    setErr]    = useState("");
+  const [busy,   setBusy]   = useState(false);
+
+  const fullLogin = normalizeLogin(login);
+  const loginOk = /^[a-z0-9._-]+@jcf\.lu$/.test(fullLogin);
+  const pwdOk = pwd.length >= MIN_PASSWORD && pwd === pwd2;
+  const canSubmit = !busy && pwdOk && (mode === "reset" || (loginOk && name.trim()));
+
+  const submit = async () => {
+    if (!canSubmit) return;
+    setErr(""); setBusy(true);
+    try {
+      if (mode === "reset") {
+        await adminUsers({ action:"reset_password", user_id:entry.profile.id, password:pwd });
+        onDone("Mot de passe modifie pour " + entry.login + ". Communiquez-le de vive voix ou par SMS.");
+      } else {
+        await adminUsers({
+          action:"create", login:fullLogin, password:pwd, role, display_name:name.trim(),
+          location_id:   role === "store"       ? locId : null,
+          collaborator_id: role === "replacement" ? colId : null,
+        });
+        onDone("Compte cree : " + fullLogin + ". Communiquez le mot de passe de vive voix ou par SMS.");
+      }
+    } catch(ex) {
+      setErr(ex.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={S.overlay} onClick={onClose}>
+      <div style={S.sheet} onClick={e => e.stopPropagation()}>
+        <div style={S.sheetHeader}>
+          <span style={{ fontWeight:700, fontSize:15, color:"#1E2F4F" }}>
+            {mode === "reset" ? "Nouveau mot de passe" : "Creer un compte"}
+          </span>
+          <button onClick={onClose} style={S.closeBtn}>&#x2715;</button>
+        </div>
+
+        {!free ? (
+          <div style={{ background:"#F8F9FB", borderRadius:10, padding:"10px 12px", marginBottom:14, border:"1px solid #E5E7EB" }}>
+            <div style={{ fontWeight:700, fontSize:13, color:"#1E2F4F" }}>{entry.name}</div>
+            <div style={{ fontSize:12, color:"#6B7280" }}>{entry.login} · {ROLE_LABELS[entry.role] || entry.role}</div>
+          </div>
+        ) : (
+          <div>
+            <FormLabel text="Identifiant" />
+            <input style={S.input} value={login} onChange={e => setLogin(e.target.value)} placeholder="nom ou nom@jcf.lu" autoCapitalize="none" />
+            {login && !loginOk && <div style={{ fontSize:11, color:"#C0392B", marginTop:-6, marginBottom:8 }}>Format attendu : nom@jcf.lu (lettres, chiffres, . _ -)</div>}
+            <FormLabel text="Nom affiche" />
+            <input style={S.input} value={name} onChange={e => setName(e.target.value)} />
+            <FormLabel text="Role" />
+            <select style={S.input} value={role} onChange={e => setRole(e.target.value)}>
+              <option value="store">{ROLE_LABELS.store}</option>
+              <option value="replacement">{ROLE_LABELS.replacement}</option>
+              <option value="admin">{ROLE_LABELS.admin}</option>
+            </select>
+            {role === "store" && (
+              <div>
+                <FormLabel text="Lieu" />
+                <select style={S.input} value={locId} onChange={e => setLocId(e.target.value)}>
+                  <optgroup label="Magasins">{STORES.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</optgroup>
+                  <optgroup label="Missions">{MISSIONS.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</optgroup>
+                </select>
+              </div>
+            )}
+            {role === "replacement" && (
+              <div>
+                <FormLabel text="Collaborateur" />
+                <select style={S.input} value={colId} onChange={e => setColId(e.target.value)}>
+                  {(dynCollaborators || []).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+            )}
+          </div>
+        )}
+
+        <FormLabel text={"Mot de passe (" + MIN_PASSWORD + " caracteres minimum)"} />
+        <input style={S.input} type={show ? "text" : "password"} autoComplete="new-password" value={pwd} onChange={e => setPwd(e.target.value)} />
+        <FormLabel text="Confirmer le mot de passe" />
+        <input style={S.input} type={show ? "text" : "password"} autoComplete="new-password" value={pwd2} onChange={e => setPwd2(e.target.value)} />
+        <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, color:"#6B7280", marginBottom:10 }}>
+          <input type="checkbox" checked={show} onChange={e => setShow(e.target.checked)} /> Afficher
+        </label>
+        {pwd && pwd.length < MIN_PASSWORD && <div style={{ fontSize:11, color:"#C0392B", marginBottom:6 }}>Trop court.</div>}
+        {pwd2 && pwd !== pwd2 && <div style={{ fontSize:11, color:"#C0392B", marginBottom:6 }}>Les deux mots de passe ne correspondent pas.</div>}
+        {err && <div style={{ fontSize:12, color:"#C0392B", marginBottom:8 }}>{err}</div>}
+
+        <button style={{ ...S.btnGold, width:"100%", opacity:canSubmit?1:0.5 }} disabled={!canSubmit} onClick={submit}>
+          {busy ? "Enregistrement..." : (mode === "reset" ? "Enregistrer le mot de passe" : "Creer le compte")}
+        </button>
+        <div style={{ fontSize:10, color:"#9CA3AF", marginTop:8, textAlign:"center" }}>Aucun e-mail n'est envoye. Transmettez le mot de passe de vive voix ou par SMS.</div>
+      </div>
     </div>
   );
 }

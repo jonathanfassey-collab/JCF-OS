@@ -118,6 +118,7 @@ const COLLABORATORS = [
   { id:"c18", name:"Laetitia",    contract:173,  weeklyHours:40, avatar:"LM", color:"#10B981" },
   { id:"c19", name:"Nabil",       contract:173,  weeklyHours:40, avatar:"NC", color:"#E11D48" },
   { id:"c20", name:"Ozgür",       contract:173,  weeklyHours:40, avatar:"OD", color:"#7C3AED" },
+  { id:"c21", name:"Aurore F",    contract:173,  weeklyHours:40, avatar:"AF", color:"#0D9488" },
 ];
 
 const STORES = [
@@ -135,6 +136,7 @@ const STORES = [
   { id:"l23", name:"Xertigny"        }, { id:"l24", name:"Betting"         },
   { id:"l25", name:"Hettange-Grande" }, { id:"l26", name:"Clouange"        },
   { id:"l27", name:"Haguenau"        }, { id:"l28", name:"Toul"            },
+  { id:"l29", name:"Place de Paris"  }, { id:"l30", name:"Strassen"        },
 ];
 
 const MISSIONS = [
@@ -190,6 +192,7 @@ const INITIAL_RATES = {
   "c18": { weeklyHours:40, mutuelle:55.77, hourly:27.81, day:213.55, week:1023.28, fortnight:1957.58, minimumMonthly:3855.76, month:3911.53 },
   "c19": { weeklyHours:40, mutuelle:57.77, hourly:46.95, day:360.57, week:1727.73, fortnight:3305.22, minimumMonthly:6510.15, month:6567.92 },
   "c20": { weeklyHours:40, mutuelle:57.77, hourly:46.95, day:360.57, week:1727.73, fortnight:3305.22, minimumMonthly:6510.15, month:6567.92 },
+  "c21": { weeklyHours:40, mutuelle:0, hourly:0, day:0, week:0, fortnight:0, minimumMonthly:0, month:0 }, // a completer depuis la grille
 };
 
 // Tarifs indexés, appliqués automatiquement à partir du 01/02/2027.
@@ -279,6 +282,8 @@ const INITIAL_PARTNERS = [
   { id:"p27", name:"Van Mossel", commercial:"Van Mossel Autolease Luxembourg", category:"Entreprise", city:"Bertrange", country:"Luxembourg", phone:"+352 43 96 96 2500", email:"contact.leasing.luxembourg@vanmossel.lu", contact:"", comment:"Société contractante et lieu précis de mission à confirmer", sites:["s26"], status:"active" },
   { id:"p28", name:"Orange", commercial:"Orange Communications Luxembourg S.A.", category:"Entreprise", city:"Bertrange", country:"Luxembourg", phone:"+352 27 888 288", email:"corporate@orangeluxembourg.lu", contact:"", comment:"Tél. général : 800 61 606", sites:["s27"], status:"active" },
   { id:"p29", name:"Škoda Tour", commercial:"TDL Organisation a.s.b.l.", category:"Association", city:"Hesperange", country:"Luxembourg", phone:"", email:"info@skodatour.lu", contact:"", comment:"Site de mission variable selon l'étape · Adresse postale uniquement", sites:["s28"], status:"active" },
+  { id:"p30", name:"Place de Paris", commercial:"KRYS Place de Paris (KLUX)", category:"Magasin", city:"Luxembourg", country:"Luxembourg", phone:"", email:"klux@jcf.lu", contact:"", comment:"Magasin de rattachement regulier des collaborateurs", sites:["s29"], status:"active" },
+  { id:"p31", name:"Strassen", commercial:"KRYS Strassen", category:"Magasin", city:"Strassen", country:"Luxembourg", phone:"", email:"strassen@jcf.lu", contact:"", comment:"Magasin de rattachement regulier des collaborateurs", sites:["s30"], status:"active" },
 ];
 
 const INITIAL_SITES = [
@@ -310,6 +315,8 @@ const INITIAL_SITES = [
   { id:"s26", partnerId:"p27", name:"Van Mossel Autolease Bertrange", address:"9 rue des Mérovingiens, ZA Bourmicht, L-8070", city:"Bertrange", country:"Luxembourg" },
   { id:"s27", partnerId:"p28", name:"Orange Bertrange", address:"8 rue des Mérovingiens, L-8070", city:"Bertrange", country:"Luxembourg" },
   { id:"s28", partnerId:"p29", name:"TDL Organisation (adresse postale)", address:"B.P. 76, L-5801", city:"Hesperange", country:"Luxembourg" },
+  { id:"s29", partnerId:"p30", name:"Place de Paris", address:"Place de Paris", city:"Luxembourg", country:"Luxembourg" },
+  { id:"s30", partnerId:"p31", name:"Strassen", address:"226 route d'Arlon", city:"Strassen", country:"Luxembourg" },
 ];
 
 // ── Mises a disposition initiales (Chapitre 4) ───────────────────────────────
@@ -336,6 +343,7 @@ const COLLAB_EXTRA = {
   "c18": { jobCategory:"", skills:[], sector:"", sectorAlt:"", country:"", phone:"", email:"laetitia@jcf.lu", comment:"", status:"active", contractDate:"", cpHours:0, noWorkDays:[] },
   "c19": { jobCategory:"", skills:[], sector:"", sectorAlt:"", country:"", phone:"", email:"nabil@jcf.lu", comment:"", status:"active", contractDate:"", cpHours:0, noWorkDays:[] },
   "c20": { jobCategory:"", skills:[], sector:"", sectorAlt:"", country:"", phone:"", email:"ozgur@jcf.lu", comment:"", status:"active", contractDate:"", cpHours:0, noWorkDays:[] },
+  "c21": { jobCategory:"", skills:[], sector:"", sectorAlt:"", country:"", phone:"", email:"aurore@jcf.lu", comment:"", status:"active", contractDate:"", cpHours:0, noWorkDays:[] },
 };
 
 

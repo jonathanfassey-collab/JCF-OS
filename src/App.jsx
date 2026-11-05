@@ -185,6 +185,9 @@ const ABSENCE_TYPES = [
   { id:"absence",  name:"Absence",  countsHours:false, color:"#C0392B", bg:"#FEF2F2", textColor:"#B91C1C" },
   { id:"recup",    name:"Recup",    countsHours:false, color:"#5D84C3", bg:"#EFF6FF", textColor:"#1D4ED8" },
   { id:"css",      name:"Conge sans solde", countsHours:false, color:"#A16207", bg:"#FEFCE8", textColor:"#854D0E" },
+  // Mission extérieure des associés (contrats avec missions extérieures) : contenu à définir sur un planning
+  // parallèle ; marque la journée comme occupée, sans heures ni CA quantifiés pour l'instant
+  { id:"mission_ext", name:"Mission exterieure", countsHours:false, color:"#B45309", bg:"#FFF7ED", textColor:"#9A3412" },
   // Journée de formation : compte comme du temps de travail, mais ne génère pas de CA
   { id:"formation", name:"Formation", countsHours:true, color:"#7C3AED", bg:"#F5F3FF", textColor:"#6D28D9" },
   // Présence au siège selon le rythme déclaré par l'employeur (ne compte ni heures ni CA)

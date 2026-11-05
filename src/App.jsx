@@ -75,6 +75,18 @@ async function supaFetch(table, method, body, filters, extraHeaders) {
   const text = await res.text();
   return text ? JSON.parse(text) : [];
 }
+// Le serveur renvoie au plus 1000 lignes par requête : on lit par pages jusqu'à la fin.
+// Le tri doit être stable (ajouter id) pour ne sauter ni doubler aucune ligne.
+const PAGE_SIZE = 1000;
+async function supaFetchAll(table, method, body, filters) {
+  const all = [];
+  for (let offset = 0; ; offset += PAGE_SIZE) {
+    const page = await supaFetch(table, method, body, (filters ? filters + "&" : "") + "limit=" + PAGE_SIZE + "&offset=" + offset);
+    if (!Array.isArray(page)) return offset === 0 ? page : all;
+    all.push(...page);
+    if (page.length < PAGE_SIZE) return all;
+  }
+}
 function asgToRow(a) {
   return { id:a.id, collaborator_id:a.collaboratorId, date:a.date, location_id:a.locationId, type_id:a.typeId, hours:a.hours||0, booking_type:a.bookingType||"day", period_cost:a.periodCost||0, hotel_nights:a.hotelNights||0, hotel_cost:a.hotelCost||0, repas_soirs:a.repasSoirs||0, repas_cost:a.repasCost||0, ouverture:a.ouverture||false, ouverture_cost:a.ouvertureCost||0, penalite:a.penalite||0 };
 }
@@ -605,7 +617,7 @@ export default function App() {
     try {
       if (u.role === "admin") {
         const [asgRows, madRows, cpRows, cssRows] = await Promise.all([
-          supaFetch("assignments", "GET", null, "order=date.asc"),
+          supaFetchAll("assignments", "GET", null, "order=date.asc,id.asc"),
           supaFetch("mads", "GET", null, "order=created_at.desc"),
           supaFetch("cp_requests", "GET", null, "type=eq.cp&order=created_at.desc"),
           supaFetch("cp_requests", "GET", null, "type=eq.css&order=created_at.desc"),
@@ -618,8 +630,8 @@ export default function App() {
       } else {
         const isRepl = u.role === "replacement";
         const [asgRows, sharedRows, cpRows, cssRows] = await Promise.all([
-          supaFetch("assignments", "GET", null, "order=date.asc"),
-          supaFetch("rpc/jcf_shared_planning", "POST", {}),
+          supaFetchAll("assignments", "GET", null, "order=date.asc,id.asc"),
+          supaFetchAll("rpc/jcf_shared_planning", "POST", {}, "order=date.asc,id.asc"),
           isRepl ? supaFetch("cp_requests", "GET", null, "type=eq.cp&order=created_at.desc")  : Promise.resolve([]),
           isRepl ? supaFetch("cp_requests", "GET", null, "type=eq.css&order=created_at.desc") : Promise.resolve([]),
         ]);

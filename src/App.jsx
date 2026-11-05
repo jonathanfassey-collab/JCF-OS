@@ -188,6 +188,8 @@ const ABSENCE_TYPES = [
   // Mission extérieure des associés (contrats avec missions extérieures) : contenu à définir sur un planning
   // parallèle ; marque la journée comme occupée, sans heures ni CA quantifiés pour l'instant
   { id:"mission_ext", name:"Mission exterieure", countsHours:false, color:"#B45309", bg:"#FFF7ED", textColor:"#9A3412" },
+  // Réunion des associés (Codir, régionale, réunions annuelles) : remplace le siège ou la mission ce jour-là
+  { id:"reunion", name:"Reunion", countsHours:false, color:"#4338CA", bg:"#EEF2FF", textColor:"#3730A3" },
   // Journée de formation : compte comme du temps de travail, mais ne génère pas de CA
   { id:"formation", name:"Formation", countsHours:true, color:"#7C3AED", bg:"#F5F3FF", textColor:"#6D28D9" },
   // Présence au siège selon le rythme déclaré par l'employeur (ne compte ni heures ni CA)

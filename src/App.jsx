@@ -122,7 +122,7 @@ const COLLABORATORS = [
   { id:"c8",  name:"Margaux K",  contract:173,  weeklyHours:40, avatar:"MK", color:"#6366F1" },
   { id:"c9",  name:"Laura G",    contract:139,  weeklyHours:32, avatar:"LG", color:"#84CC16" },
   { id:"c11", name:"Julie W",    contract:173,  weeklyHours:40, avatar:"JW", color:"#06B6D4" },
-  { id:"c12", name:"Lucinda",    contract:120,  weeklyHours:28, avatar:"LU", color:"#A855F7" },
+  { id:"c12", name:"Lucinda",    contract:139,  weeklyHours:32, avatar:"LU", color:"#A855F7" },
   { id:"c13", name:"Valerie",    contract:69,   weeklyHours:16, avatar:"VA", color:"#D4AF37", special:"associate" },
   { id:"c14", name:"Guillaume",  contract:69,   weeklyHours:16, avatar:"GP", color:"#2D456B", special:"associate" },
   { id:"c15", name:"Celine H",   contract:130,  weeklyHours:30, avatar:"CH", color:"#9CA3AF", special:"associate" },
@@ -649,6 +649,9 @@ export default function App() {
           supaFetch("cp_requests", "GET", null, "type=eq.css&order=created_at.desc"),
         ]);
         if (asgRows && Array.isArray(asgRows))  setAssignments(asgRows.map(rowToAsg));
+        // Frais refacturés par mois : véhicule, assurance, notes de frais (table réservée à l'admin)
+        const chRows = await supaFetchAll("monthly_charges", "GET", null, "order=month.asc,id.asc");
+        if (Array.isArray(chRows)) setCharges(chRows.map(r => ({ collaboratorId:r.collaborator_id, month:r.month, kind:r.kind, amount:Number(r.amount)||0, label:r.label||"" })));
         if (madRows && Array.isArray(madRows))  setMads(madRows.map(rowToMad));
         if (cpRows  && Array.isArray(cpRows))   setCpRequests(cpRows.map(rowToCp));
         if (cssRows && Array.isArray(cssRows))  setCssRequests(cssRows.map(rowToCp));
@@ -789,6 +792,7 @@ export default function App() {
   };
 
   const [cssRequests, setCssRequests] = useState([]);
+  const [charges, setCharges] = useState([]);
   const addCssRequest = async (req) => {
     const entry = { ...req, id:"css-"+Date.now(), type:"css" };
     setCssRequests(p => [...p, entry]);
@@ -893,7 +897,7 @@ export default function App() {
   const props = { assignments, addAssignment, updateAssignment, deleteAssignment, rates, collabExtras, updateCollabExtra, partners, updatePartner, mads, addMad, updateMad, deleteMad, dynCollaborators, addCollaborator };
 
   HIDE_PRICES = !canSeePrices(user);
-  if (user.role === "admin")       return (<AdminSpace       user={user} onLogout={logout} {...props} updateRate={updateRate} cpRequests={cpRequests} validateCpRequest={validateCpRequest} refuseCpRequest={refuseCpRequest} cssRequests={cssRequests} validateCssRequest={validateCssRequest} refuseCssRequest={refuseCssRequest} onRefresh={refreshData} />);
+  if (user.role === "admin")       return (<AdminSpace       user={user} onLogout={logout} {...props} charges={charges} updateRate={updateRate} cpRequests={cpRequests} validateCpRequest={validateCpRequest} refuseCpRequest={refuseCpRequest} cssRequests={cssRequests} validateCssRequest={validateCssRequest} refuseCssRequest={refuseCssRequest} onRefresh={refreshData} />);
   if (user.role === "store")       return (<StoreSpace       user={user} onLogout={logout} {...props} onRefresh={refreshData} />);
   if (user.role === "replacement") return (<ReplacementSpace user={user} onLogout={logout} {...props} addCpRequest={addCpRequest} cpRequests={cpRequests} addCssRequest={addCssRequest} cssRequests={cssRequests} onRefresh={refreshData} />);
   return null;
@@ -1444,7 +1448,7 @@ function LoginScreen({ onLogin }) {
 // ════════════════════════════════════════════════════════════
 // ESPACE ADMIN
 // ════════════════════════════════════════════════════════════
-function AdminSpace({ user, onLogout, onRefresh, assignments, addAssignment, updateAssignment, deleteAssignment, rates, updateRate, collabExtras, updateCollabExtra, partners, updatePartner, mads, addMad, updateMad, deleteMad, dynCollaborators, addCollaborator, cpRequests, validateCpRequest, refuseCpRequest, cssRequests, validateCssRequest, refuseCssRequest }) {
+function AdminSpace({ user, onLogout, onRefresh, assignments, addAssignment, updateAssignment, deleteAssignment, rates, updateRate, collabExtras, updateCollabExtra, partners, updatePartner, mads, addMad, updateMad, deleteMad, dynCollaborators, addCollaborator, cpRequests, validateCpRequest, refuseCpRequest, cssRequests, validateCssRequest, refuseCssRequest, charges }) {
   const [tab, setTab]     = useState("dashboard");
   const [modal, setModal] = useState(null);
   const props = { assignments, addAssignment, updateAssignment, deleteAssignment, setModal, rates, collabExtras, updateCollabExtra, partners, updatePartner, mads, addMad, updateMad, deleteMad, dynCollaborators, addCollaborator };
@@ -1492,7 +1496,7 @@ function AdminSpace({ user, onLogout, onRefresh, assignments, addAssignment, upd
         {tab==="collaborators" && <CollaboratorsView {...props} jobCategories={INITIAL_JOB_CATEGORIES} skills={INITIAL_SKILLS} sectors={INITIAL_SECTORS} collabExtras={collabExtras} updateCollabExtra={updateCollabExtra} dynCollaborators={dynCollaborators} addCollaborator={addCollaborator} />}
         {tab==="partners"      && <PartnersView assignments={assignments} partners={partners} updatePartner={updatePartner} />}
         {tab==="hours"         && <HoursView         assignments={assignments} rates={rates} collabExtras={collabExtras} />}
-        {tab==="ca"            && <CaDetailView      assignments={assignments} rates={rates} />}
+        {tab==="ca"            && <CaDetailView      assignments={assignments} rates={rates} charges={charges} />}
         {tab==="rates"         && <RatesView         rates={rates} updateRate={updateRate} collabExtras={collabExtras} />}
         {tab==="accounts"      && <AccountsView      user={user} dynCollaborators={dynCollaborators} collabExtras={collabExtras} />}
         {tab==="settings"      && <SettingsView />}
@@ -3840,7 +3844,11 @@ function RatesView({ rates, updateRate, collabExtras }) {
   );
 }
 
-function CaDetailView({ assignments, rates }) {
+// Jours facturés au client : le travail, et les absences payées par l'employeur (congés payés, fériés, maladie).
+// Les congés sans solde ne sont pas facturés.
+const BILLED_ABSENCES = ["cp", "ferie", "maladie"];
+const CHARGE_LABELS = { vehicule:"Vehicule", assurance:"Assurance", ndf:"Notes de frais" };
+function CaDetailView({ assignments, rates, charges }) {
   const now = new Date();
   const currentYear = now.getFullYear();
   const [selYear,  setSelYear]  = useState(currentYear);
@@ -3853,19 +3861,26 @@ function CaDetailView({ assignments, rates }) {
   const HOTEL_RATE = 120; // €/nuit
 
   const workA = assignments.filter(a => isWorkType(a.typeId) && a.date.startsWith(selMonth));
+  const absA  = assignments.filter(a => BILLED_ABSENCES.includes(a.typeId) && a.date.startsWith(selMonth) && (a.periodCost||0) > 0);
+  const monthCharges = (charges || []).filter(ch => ch.month === selMonth);
 
   const byCollab = useMemo(() => {
     const m = {};
+    const row = id => (m[id] = m[id] || { hours:0, budget:0, hotel:0, repas:0, ouverture:0, abs:0, absDays:0, charges:0, chargeDetail:{} });
     workA.forEach(a => {
-      if (!m[a.collaboratorId]) m[a.collaboratorId] = { hours:0, budget:0, hotel:0, repas:0, ouverture:0 };
-      m[a.collaboratorId].hours     += a.hours;
-      m[a.collaboratorId].budget    += budgetAssignment(a, rates);
-      m[a.collaboratorId].hotel     += (a.hotelCost||0);
-      m[a.collaboratorId].repas     += (a.repasCost||0);
-      m[a.collaboratorId].ouverture += (a.ouvertureCost||0);
+      const r = row(a.collaboratorId);
+      r.hours     += a.hours;
+      r.budget    += budgetAssignment(a, rates);
+      r.hotel     += (a.hotelCost||0);
+      r.repas     += (a.repasCost||0);
+      r.ouverture += (a.ouvertureCost||0);
     });
+    absA.forEach(a => { const r = row(a.collaboratorId); r.abs += a.periodCost; r.absDays += 1; r.budget += a.periodCost; });
+    monthCharges.forEach(ch => { const r = row(ch.collaboratorId); r.charges += ch.amount; r.chargeDetail[ch.kind] = (r.chargeDetail[ch.kind]||0) + ch.amount; r.budget += ch.amount; });
     return m;
-  }, [workA, rates]);
+  }, [workA, absA, monthCharges, rates]);
+  const totalCharges = monthCharges.reduce((s,ch) => s+ch.amount, 0);
+  const totalAbs     = absA.reduce((s,a) => s+a.periodCost, 0);
 
   const byClient = useMemo(() => {
     const m = {};
@@ -3905,7 +3920,9 @@ function CaDetailView({ assignments, rates }) {
       <div style={{ background:"#1E2F4F", borderRadius:14, margin:"8px 16px", padding:"16px" }}>
         <div style={{ fontSize:11, color:"rgba(255,255,255,.4)", textTransform:"uppercase", letterSpacing:"0.5px" }}>Budget total estimatif</div>
         <div style={{ fontSize:26, fontWeight:800, color:"#D4AF37", fontVariantNumeric:"tabular-nums", marginTop:4 }}>{fmtEur(Math.round(totalBudget))}</div>
-        <div style={{ fontSize:10, color:"rgba(255,255,255,.4)", marginTop:4 }}>Tarifs collaborateurs HT · hors frais annexes · facturation manuelle JCF</div>
+        <div style={{ fontSize:10, color:"rgba(255,255,255,.4)", marginTop:4 }}>
+          Tarifs collaborateurs HT{totalAbs>0 ? " · dont congés/absences payés "+fmtEur(Math.round(totalAbs)) : ""}{totalCharges>0 ? " · dont frais refacturés "+fmtEur(Math.round(totalCharges)) : ""}
+        </div>
       </div>
       <SectionTitle title="Par collaborateur" sub={MONTH_NAMES[parseInt(selMonth.split("-")[1])-1]+" "+selYear} />
       <div style={S.cardList}>
@@ -3917,7 +3934,12 @@ function CaDetailView({ assignments, rates }) {
               <ColAvatar c={c} size={30} />
               <div style={{ flex:1 }}>
                 <div style={{ fontWeight:600, fontSize:13, color:"#1E2F4F" }}>{c.name}</div>
-                <div style={{ fontSize:11, color:"#6B7280" }}>{s.hours}h travaillees</div>
+                <div style={{ fontSize:11, color:"#6B7280" }}>{Math.round(s.hours*100)/100}h travaillees{s.absDays>0 ? " · "+s.absDays+" j. congés/absences payés" : ""}</div>
+                {s.charges>0 && (
+                  <div style={{ fontSize:10, color:"#9CA3AF" }}>
+                    {Object.entries(s.chargeDetail).map(([k,v]) => (CHARGE_LABELS[k]||k)+" "+fmtEur(Math.round(v*100)/100)).join(" · ")}
+                  </div>
+                )}
                 {(s.hotel>0||s.repas>0||s.ouverture>0) && (
                   <div style={{ fontSize:10, color:"#9CA3AF" }}>
                     {s.hotel>0     && "Hotel "+fmtEur(s.hotel)+" "}

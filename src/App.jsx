@@ -507,7 +507,12 @@ function absStyle(t) {
 function countsHoursType(t) { return isWorkType(t) || ABSENCE_TYPES.some(x => x.id === t && x.countsHours); }
 function calcHours(arr) { return Math.round(arr.filter(a => countsHoursType(a.typeId)).reduce((s,a) => s+a.hours, 0) * 100) / 100; }
 function estimateRate(h) { if (h<=0) return 0; if (h<=4) return RATES.halfDay; if (h<=8) return Math.round(h*RATES.hourly); return Math.round(h*RATES.hourly*0.95); }
-function fmtEur(n) { return Number(n).toLocaleString("fr-FR") + " \u20AC"; }
+// Magasins dirigés par des salariés (directeur, responsable) : aucun tarif ni coût affiché,
+// pour qu'ils ne puissent pas comparer les rémunérations entre collaborateurs.
+const STORES_WITHOUT_PRICES = ["l29", "l30"]; // Place de Paris (KLUX), Strassen
+let HIDE_PRICES = false; // fixé à chaque rendu de l'application selon le compte connecté
+function canSeePrices(user) { return !!user && !(user.role === "store" && STORES_WITHOUT_PRICES.includes(user.locationId)); }
+function fmtEur(n) { if (HIDE_PRICES) return ""; return Number(n).toLocaleString("fr-FR") + " \u20AC"; }
 function fmtDateFR(ds) {
   if (!ds) return "-";
   const d = new Date(ds + "T12:00:00");
@@ -887,6 +892,7 @@ export default function App() {
 
   const props = { assignments, addAssignment, updateAssignment, deleteAssignment, rates, collabExtras, updateCollabExtra, partners, updatePartner, mads, addMad, updateMad, deleteMad, dynCollaborators, addCollaborator };
 
+  HIDE_PRICES = !canSeePrices(user);
   if (user.role === "admin")       return (<AdminSpace       user={user} onLogout={logout} {...props} updateRate={updateRate} cpRequests={cpRequests} validateCpRequest={validateCpRequest} refuseCpRequest={refuseCpRequest} cssRequests={cssRequests} validateCssRequest={validateCssRequest} refuseCssRequest={refuseCssRequest} onRefresh={refreshData} />);
   if (user.role === "store")       return (<StoreSpace       user={user} onLogout={logout} {...props} onRefresh={refreshData} />);
   if (user.role === "replacement") return (<ReplacementSpace user={user} onLogout={logout} {...props} addCpRequest={addCpRequest} cpRequests={cpRequests} addCssRequest={addCssRequest} cssRequests={cssRequests} onRefresh={refreshData} />);
@@ -1852,14 +1858,14 @@ function ReservationModal({ collab, locationId, assignments, onClose, onConfirm,
               </div>
             );
           })()}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:4 }}>
+          {!HIDE_PRICES && <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:4 }}>
             {[{l:"Journee",v:r.day||0},{l:"Semaine",v:r.week||0},{l:"Quinzaine",v:r.fortnight||0},{l:"Mois",v:r.month||0}].map(t => (
               <div key={t.l} style={{ background:"#ffffff", borderRadius:8, padding:"6px 10px", display:"flex", justifyContent:"space-between" }}>
                 <span style={{ fontSize:11, color:"#6B7280" }}>{t.l}</span>
                 <span style={{ fontSize:12, fontWeight:700, color:"#1E2F4F", fontVariantNumeric:"tabular-nums" }}>{fmtEur(t.v)}</span>
               </div>
             ))}
-          </div>
+          </div>}
         </div>
 
         {step==="form" && (
@@ -1921,7 +1927,7 @@ function ReservationModal({ collab, locationId, assignments, onClose, onConfirm,
                 </button>
               ))}
             </div>
-            {extraH > 0 && (
+            {extraH > 0 && !HIDE_PRICES && (
               <div style={{ fontSize:11, color:"#6B7280", marginBottom:8 }}>
                 +{extraH}h x {fmtEur(r.hourly||0)}/h = +{fmtEur(Math.round(extraH*(r.hourly||0)))}
               </div>
@@ -1965,28 +1971,28 @@ function ReservationModal({ collab, locationId, assignments, onClose, onConfirm,
               <div style={{ flex:1, textAlign:"center" }}>
                 <span style={{ fontSize:20, fontWeight:800, color:"#1E2F4F" }}>{hotelNights}</span>
                 <span style={{ fontSize:12, color:"#6B7280", marginLeft:6 }}>nuit{hotelNights>1?"s":""}</span>
-                {hotelNights>0 && <div style={{ fontSize:11, color:"#D4AF37", fontWeight:600 }}>{fmtEur(hotelNights*HOTEL_RATE)} ({HOTEL_RATE}€/nuit)</div>}
+                {hotelNights>0 && !HIDE_PRICES && <div style={{ fontSize:11, color:"#D4AF37", fontWeight:600 }}>{fmtEur(hotelNights*HOTEL_RATE)} ({HOTEL_RATE}€/nuit)</div>}
               </div>
               <button onClick={()=>setHotelNights(hotelNights+1)}
                 style={{ width:36, height:36, borderRadius:8, border:"1.5px solid #E5E7EB", background:"#F8F9FB", fontSize:18, cursor:"pointer", color:"#1E2F4F" }}>+</button>
             </div>
             {/* Frais de bouche */}
-            <FormLabel text="Repas du soir (18€/soir)" />
+            <FormLabel text={HIDE_PRICES ? "Repas du soir" : "Repas du soir (18€/soir)"} />
             <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
               <button onClick={()=>setRepasSoirs(Math.max(0,repasSoirs-1))}
                 style={{ width:36, height:36, borderRadius:8, border:"1.5px solid #E5E7EB", background:"#F8F9FB", fontSize:18, cursor:"pointer", color:"#1E2F4F" }}>−</button>
               <div style={{ flex:1, textAlign:"center" }}>
                 <span style={{ fontSize:20, fontWeight:800, color:"#1E2F4F" }}>{repasSoirs}</span>
                 <span style={{ fontSize:12, color:"#6B7280", marginLeft:6 }}>soir{repasSoirs>1?"s":""}</span>
-                {repasSoirs>0 && <div style={{ fontSize:11, color:"#D4AF37", fontWeight:600 }}>{fmtEur(repasSoirs*REPAS_RATE)} ({REPAS_RATE}€/soir)</div>}
+                {repasSoirs>0 && !HIDE_PRICES && <div style={{ fontSize:11, color:"#D4AF37", fontWeight:600 }}>{fmtEur(repasSoirs*REPAS_RATE)} ({REPAS_RATE}€/soir)</div>}
               </div>
               <button onClick={()=>setRepasSoirs(repasSoirs+1)}
                 style={{ width:36, height:36, borderRadius:8, border:"1.5px solid #E5E7EB", background:"#F8F9FB", fontSize:18, cursor:"pointer", color:"#1E2F4F" }}>+</button>
             </div>
             {/* Ouverture / Fermeture */}
-            <FormLabel text="Responsabilite ouverture/fermeture (+150€)" />
+            <FormLabel text={HIDE_PRICES ? "Responsabilite ouverture/fermeture" : "Responsabilite ouverture/fermeture (+150€)"} />
             <div style={{ display:"flex", gap:8, marginBottom:12 }}>
-              {[{id:false,label:"Non"},{id:true,label:"Oui +150€"}].map(opt => (
+              {[{id:false,label:"Non"},{id:true,label:HIDE_PRICES ? "Oui" : "Oui +150€"}].map(opt => (
                 <button key={String(opt.id)}
                   onClick={()=>setOuverture(opt.id)}
                   style={{ flex:1, border:"1.5px solid "+(ouverture===opt.id?"#D4AF37":"#E5E7EB"), borderRadius:8, padding:"9px 6px", fontSize:12, fontWeight:600, cursor:"pointer", background:ouverture===opt.id?"#FFFBEB":"#F8F9FB", color:ouverture===opt.id?"#1E2F4F":"#6B7280" }}>
@@ -2021,7 +2027,7 @@ function ReservationModal({ collab, locationId, assignments, onClose, onConfirm,
               </div>
             ))}
 
-            <div style={{ background:"#1E2F4F", borderRadius:12, padding:"14px 16px", marginTop:14, marginBottom:10 }}>
+            {!HIDE_PRICES && <div style={{ background:"#1E2F4F", borderRadius:12, padding:"14px 16px", marginTop:14, marginBottom:10 }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:hotelNights>0?8:0 }}>
                 <span style={{ color:"rgba(255,255,255,.6)", fontSize:12 }}>Tarif collaborateur HT</span>
                 <span style={{ fontWeight:700, fontSize:16, color:"rgba(255,255,255,.85)" }}>{fmtEur(Math.round(collabCost))}</span>
@@ -2063,10 +2069,10 @@ function ReservationModal({ collab, locationId, assignments, onClose, onConfirm,
                   Extension : {extraH}h x {fmtEur(r.hourly||0)}/h
                 </div>
               )}
-            </div>
+            </div>}
 
             <div style={{ background:"#FFFBEB", border:"1px solid #FDE68A", borderRadius:10, padding:"10px 12px", marginBottom:12, fontSize:10, color:"#92400E", lineHeight:1.6 }}>
-              La disponibilite du collaborateur est bloquee sur la periode reservee. Les heures non utilisees restent dues. Estimation indicative — facturation finale par JCF Luxtalent.
+              La disponibilite du collaborateur est bloquee sur la periode reservee. Les heures non utilisees restent dues.{HIDE_PRICES ? "" : " Estimation indicative — facturation finale par JCF Luxtalent."}
             </div>
 
             {skipConfl && conflictDates.length > 0 && (
@@ -2147,7 +2153,7 @@ function StoreCalendar({ myReservations, rates, onClickEntry }) {
           { v:stats.hours+"h",  l:"Heures",   c:"#2D456B" },
           { v:String(stats.collabs), l:"Collabs", c:"#2E8B57" },
           { v:fmtEur(stats.budget), l:"Budget estim.", c:"#D4AF37" },
-        ].map((k, i) => (
+        ].filter(k => !(HIDE_PRICES && k.l==="Budget estim.")).map((k, i) => (
           <div key={i} style={{ flex:"0 0 auto", minWidth:74, background:"#ffffff", borderRadius:12, padding:"10px 8px", textAlign:"center", boxShadow:"0 1px 4px rgba(30,47,79,.07)", borderTop:"3px solid "+k.c }}>
             <div style={{ fontSize:13, fontWeight:800, color:k.c, fontVariantNumeric:"tabular-nums", whiteSpace:"nowrap" }}>{k.v}</div>
             <div style={{ fontSize:9, color:"#6B7280", marginTop:2 }}>{k.l}</div>
@@ -2254,12 +2260,12 @@ function ReservationDetail({ assignment, rates, onClose, onCancel, onCancelLate 
             <span style={{ fontSize:13, fontWeight:600, color:"#1E2F4F" }}>{row.value}</span>
           </div>
         ))}
-        <div style={{ background:"#1E2F4F", borderRadius:12, padding:"14px 16px", marginTop:12, marginBottom:10 }}>
+        {!HIDE_PRICES && <div style={{ background:"#1E2F4F", borderRadius:12, padding:"14px 16px", marginTop:12, marginBottom:10 }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
             <span style={{ color:"rgba(255,255,255,.6)", fontSize:12 }}>Budget HT</span>
             <span style={{ fontWeight:800, fontSize:20, color:"#D4AF37" }}>{fmtEur(Math.round(budget))}</span>
           </div>
-        </div>
+        </div>}
 
         {/* Annulation tardive — alerte */}
         {isLate && !confirmCancel && assignment.typeId !== "annulation" && (
@@ -2268,7 +2274,7 @@ function ReservationDetail({ assignment, rates, onClose, onCancel, onCancelLate 
               Annulation tardive — moins de 24h
             </div>
             <div style={{ fontSize:12, color:"#C0392B", marginBottom:8 }}>
-              Une penalite de 30% sera automatiquement facturee : {fmtEur(penalite)}
+              Une penalite de 30% sera automatiquement facturee{HIDE_PRICES ? "." : " : " + fmtEur(penalite)}
             </div>
           </div>
         )}
@@ -2277,13 +2283,13 @@ function ReservationDetail({ assignment, rates, onClose, onCancel, onCancelLate 
         {confirmCancel && (
           <div style={{ background:"#FEF2F2", border:"1px solid #FECACA", borderRadius:10, padding:"12px 14px", marginBottom:12 }}>
             <div style={{ fontWeight:700, fontSize:13, color:"#C0392B", marginBottom:8 }}>
-              Confirmer l'annulation ? Penalite : {fmtEur(penalite)}
+              Confirmer l'annulation ? Penalite de 30%{HIDE_PRICES ? "" : " : " + fmtEur(penalite)}
             </div>
             <div style={{ display:"flex", gap:8 }}>
               <button style={{ ...S.btn, flex:1, background:"#F8F9FB", color:"#6B7280" }} onClick={() => setConfirmCancel(false)}>Retour</button>
               <button style={{ flex:2, border:"none", borderRadius:8, padding:"10px", fontSize:12, fontWeight:700, cursor:"pointer", background:"#C0392B", color:"#ffffff" }}
                 onClick={() => { onCancelLate(assignment, penalite); onClose(); }}>
-                Confirmer — {fmtEur(penalite)} factures
+                {HIDE_PRICES ? "Confirmer l'annulation" : "Confirmer — " + fmtEur(penalite) + " factures"}
               </button>
             </div>
           </div>
@@ -2385,7 +2391,7 @@ function StoreSpace({ user, onLogout, onRefresh, assignments, addAssignment, del
                   ) : (
                     <>
                       <div style={{ fontSize:11, color:"#6B7280" }}>{c.weeklyHours}h/sem · {c.contract}h/mois</div>
-                      <div style={{ fontSize:11, color:"#D4AF37", fontWeight:600 }}>Journee · {fmtEur(calcTotalRate("day",1,c.id,rates))} HT</div>
+                      {!HIDE_PRICES && <div style={{ fontSize:11, color:"#D4AF37", fontWeight:600 }}>Journee · {fmtEur(calcTotalRate("day",1,c.id,rates))} HT</div>}
                     </>
                   )}
                 </div>
@@ -2425,17 +2431,17 @@ function StoreSpace({ user, onLogout, onRefresh, assignments, addAssignment, del
                         {days===1 ? DAY_NAMES[dS.getDay()]+" "+dS.getDate()+" "+MONTH_NAMES[dS.getMonth()] : "Du "+dS.getDate()+" au "+dE.getDate()+" "+MONTH_NAMES[dE.getMonth()]+" · "+days+" jours"}
                       </div>
                     </div>
-                    <div style={{ textAlign:"right" }}>
+                    {!HIDE_PRICES && <div style={{ textAlign:"right" }}>
                       <div style={{ fontSize:13, fontWeight:700, color:"#D4AF37" }}>{fmtEur(Math.round(totalBudget))}</div>
                       {totalFrais > 0 && <div style={{ fontSize:10, color:"#9CA3AF" }}>dont {fmtEur(totalFrais)} frais</div>}
                       {totalFrais === 0 && <div style={{ fontSize:10, color:"#9CA3AF" }}>Budget HT</div>}
-                    </div>
+                    </div>}
                   </div>
                   <div style={{ fontSize:11, color:"#6B7280", paddingTop:6, borderTop:"1px solid #F8F9FB" }}>
                     {(COMMERCIAL_TYPES.find(ct=>ct.id===rt)||{}).label||rt} · {g.totalHours}h
-                    {(g.totalHotel||0)>0 && " · Hotel "+fmtEur(g.totalHotel)}
-                    {(g.totalRepas||0)>0 && " · Repas "+fmtEur(g.totalRepas)}
-                    {(g.totalOuverture||0)>0 && " · Ouverture/Ferm. "+fmtEur(g.totalOuverture)}
+                    {(g.totalHotel||0)>0 && " · Hotel"+(HIDE_PRICES?"":" "+fmtEur(g.totalHotel))}
+                    {(g.totalRepas||0)>0 && " · Repas"+(HIDE_PRICES?"":" "+fmtEur(g.totalRepas))}
+                    {(g.totalOuverture||0)>0 && " · Ouverture/Ferm."+(HIDE_PRICES?"":" "+fmtEur(g.totalOuverture))}
                   </div>
                 </div>
               );
@@ -5304,7 +5310,7 @@ function CreateMadModal({ onClose, addMad, rates, partners, assignments }) {
               <div style={{ flex:1, textAlign:"center" }}>
                 <span style={{ fontSize:20, fontWeight:800, color:"#1E2F4F" }}>{hotelNights}</span>
                 <span style={{ fontSize:12, color:"#6B7280", marginLeft:6 }}>nuit{hotelNights>1?"s":""}</span>
-                {hotelNights>0 && <div style={{ fontSize:11, color:"#D4AF37", fontWeight:600 }}>{fmtEur(hotelNights*HOTEL_RATE)} ({HOTEL_RATE}€/nuit)</div>}
+                {hotelNights>0 && !HIDE_PRICES && <div style={{ fontSize:11, color:"#D4AF37", fontWeight:600 }}>{fmtEur(hotelNights*HOTEL_RATE)} ({HOTEL_RATE}€/nuit)</div>}
               </div>
               <button onClick={()=>setHotelNights(hotelNights+1)}
                 style={{ width:36, height:36, borderRadius:8, border:"1.5px solid #E5E7EB", background:"#F8F9FB", fontSize:18, cursor:"pointer", color:"#1E2F4F" }}>+</button>
@@ -5317,7 +5323,7 @@ function CreateMadModal({ onClose, addMad, rates, partners, assignments }) {
               <div style={{ flex:1, textAlign:"center" }}>
                 <span style={{ fontSize:20, fontWeight:800, color:"#1E2F4F" }}>{repasSoirs}</span>
                 <span style={{ fontSize:12, color:"#6B7280", marginLeft:6 }}>soir{repasSoirs>1?"s":""}</span>
-                {repasSoirs>0 && <div style={{ fontSize:11, color:"#D4AF37", fontWeight:600 }}>{fmtEur(repasSoirs*REPAS_RATE)} ({REPAS_RATE}€/soir)</div>}
+                {repasSoirs>0 && !HIDE_PRICES && <div style={{ fontSize:11, color:"#D4AF37", fontWeight:600 }}>{fmtEur(repasSoirs*REPAS_RATE)} ({REPAS_RATE}€/soir)</div>}
               </div>
               <button onClick={()=>setRepasSoirs(repasSoirs+1)}
                 style={{ width:36, height:36, borderRadius:8, border:"1.5px solid #E5E7EB", background:"#F8F9FB", fontSize:18, cursor:"pointer", color:"#1E2F4F" }}>+</button>

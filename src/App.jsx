@@ -173,8 +173,8 @@ const ABSENCE_TYPES = [
   { id:"absence",  name:"Absence",  countsHours:false, color:"#C0392B", bg:"#FEF2F2", textColor:"#B91C1C" },
   { id:"recup",    name:"Recup",    countsHours:false, color:"#5D84C3", bg:"#EFF6FF", textColor:"#1D4ED8" },
   { id:"css",      name:"Conge sans solde", countsHours:false, color:"#A16207", bg:"#FEFCE8", textColor:"#854D0E" },
-  // Journée de formation : notée au planning, sans heures ni CA (comme le siège)
-  { id:"formation", name:"Formation", countsHours:false, color:"#7C3AED", bg:"#F5F3FF", textColor:"#6D28D9" },
+  // Journée de formation : compte comme du temps de travail, mais ne génère pas de CA
+  { id:"formation", name:"Formation", countsHours:true, color:"#7C3AED", bg:"#F5F3FF", textColor:"#6D28D9" },
   // Présence au siège selon le rythme déclaré par l'employeur (ne compte ni heures ni CA)
   { id:"siege",    name:"Siege JCF (declare)", countsHours:false, color:"#2D456B", bg:"#EEF2F8", textColor:"#2D456B" },
   // Passage dans un magasin attesté par le planning du magasin (ne compte ni heures ni CA)
@@ -486,7 +486,9 @@ function absStyle(t) {
   const a = ABSENCE_TYPES.find(x => x.id === t);
   return a ? { color:a.textColor, bg:a.bg, border:a.color } : { color:"#6B7280", bg:"#F9FAFB", border:"#9CA3AF" };
 }
-function calcHours(arr) { return arr.filter(a => isWorkType(a.typeId)).reduce((s,a) => s+a.hours, 0); }
+// Heures de travail : le travail facturé, plus les motifs qui comptent comme du temps de travail (formation)
+function countsHoursType(t) { return isWorkType(t) || ABSENCE_TYPES.some(x => x.id === t && x.countsHours); }
+function calcHours(arr) { return arr.filter(a => countsHoursType(a.typeId)).reduce((s,a) => s+a.hours, 0); }
 function estimateRate(h) { if (h<=0) return 0; if (h<=4) return RATES.halfDay; if (h<=8) return Math.round(h*RATES.hourly); return Math.round(h*RATES.hourly*0.95); }
 function fmtEur(n) { return Number(n).toLocaleString("fr-FR") + " \u20AC"; }
 function fmtDateFR(ds) {
@@ -4002,6 +4004,7 @@ function AssignmentModal({ modal, onClose, addAssignment, updateAssignment, dele
     return Math.round(r.weeklyHours / 5 * 10) / 10; // weeklyHours / 5 jours
   }, [collabId, rates]);
   const isWork = isWorkType(typeId);
+  const withHours = countsHoursType(typeId);
 
   // Dates à créer selon la période
   const datesToCreate = useMemo(() => {
@@ -4023,11 +4026,11 @@ function AssignmentModal({ modal, onClose, addAssignment, updateAssignment, dele
   const save = () => {
     if (!collabId) return;
     if (isEdit) {
-      const entry = { collaboratorId:collabId, date, locationId:locId||typeId, typeId, hours: isWork?hours:0 };
+      const entry = { collaboratorId:collabId, date, locationId:locId||typeId, typeId, hours: withHours?hours:0 };
       updateAssignment(a.id, entry);
     } else {
       datesToCreate.forEach(ds => {
-        addAssignment({ collaboratorId:collabId, date:ds, locationId:locId||typeId, typeId, hours: isWork?hours:0 });
+        addAssignment({ collaboratorId:collabId, date:ds, locationId:locId||typeId, typeId, hours: withHours?hours:0 });
       });
     }
     onClose();
@@ -4080,6 +4083,15 @@ function AssignmentModal({ modal, onClose, addAssignment, updateAssignment, dele
           <option value="work">Travail</option>
           {ABSENCE_TYPES.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
+        {!isWork && withHours && (
+          <div>
+            <FormLabel text="Heures" />
+            <div style={{ fontSize:10, color:"#9CA3AF", marginBottom:4 }}>
+              Comptent dans les heures de travail, sans CA · base contractuelle : {defaultHours}h/jour
+            </div>
+            <input type="number" style={S.input} value={hours} min={1} max={24} onChange={e => setHours(+e.target.value)} />
+          </div>
+        )}
         {isWork && (
           <div>
             <FormLabel text="Lieu" />
@@ -5501,7 +5513,7 @@ function PlanningTimeline({ assignments, year, month, onPrev, onNext, onToday, o
   // Stat du mois
   const monthA = assignments.filter(a=>a.date.startsWith(monthStr));
   const actifs = new Set(monthA.filter(a=>isWorkType(a.typeId)).map(a=>a.collaboratorId)).size;
-  const totalH = monthA.filter(a=>isWorkType(a.typeId)).reduce((s,a)=>s+a.hours,0);
+  const totalH = calcHours(monthA);
 
   // Couleur d'une case
   const cellStyle = (a) => {

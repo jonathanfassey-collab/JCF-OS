@@ -500,7 +500,7 @@ function absStyle(t) {
 }
 // Heures de travail : le travail facturé, plus les motifs qui comptent comme du temps de travail (formation)
 function countsHoursType(t) { return isWorkType(t) || ABSENCE_TYPES.some(x => x.id === t && x.countsHours); }
-function calcHours(arr) { return arr.filter(a => countsHoursType(a.typeId)).reduce((s,a) => s+a.hours, 0); }
+function calcHours(arr) { return Math.round(arr.filter(a => countsHoursType(a.typeId)).reduce((s,a) => s+a.hours, 0) * 100) / 100; }
 function estimateRate(h) { if (h<=0) return 0; if (h<=4) return RATES.halfDay; if (h<=8) return Math.round(h*RATES.hourly); return Math.round(h*RATES.hourly*0.95); }
 function fmtEur(n) { return Number(n).toLocaleString("fr-FR") + " \u20AC"; }
 function fmtDateFR(ds) {
@@ -2834,7 +2834,9 @@ function AdminDashboard({ assignments, setModal, rates }) {
   const _mon = getCurrentMonday(); const _sun = (() => { const d=new Date(_mon+"T12:00:00"); d.setDate(d.getDate()+6); return d.toISOString().split("T")[0]; })();
   const caWeek   = assignments.filter(a => a.date>=_mon && a.date<=_sun && isWorkType(a.typeId)).reduce((s,a) => s+estCollab(a.collaboratorId,a.hours,ratesForDate(rates,a.date)), 0);
   const mGroups  = groupMissions(todayA);
-  const alerts   = COLLABORATORS.map(c => { const ph=calcHours(assignments.filter(a=>a.collaboratorId===c.id)); return ph>c.contract?{name:c.name,over:ph-c.contract}:null; }).filter(Boolean);
+  // Heures sup : heures planifiées du mois en cours comparées au contrat mensuel
+  const moisAlerte = TODAY.slice(0,7);
+  const alerts   = COLLABORATORS.map(c => { const ph=calcHours(assignments.filter(a=>a.collaboratorId===c.id && a.date.startsWith(moisAlerte))); const over=Math.round((ph-c.contract)*10)/10; return over>0?{name:c.name,over}:null; }).filter(Boolean);
 
   return (
     <div style={S.page}>
@@ -2903,7 +2905,7 @@ function AdminDashboard({ assignments, setModal, rates }) {
       })()}
       {alerts.length > 0 && (
         <div>
-          <SectionTitle title="Alertes" sub="Heures sup" />
+          <SectionTitle title="Alertes" sub={"Heures sup · " + MONTH_NAMES[Number(moisAlerte.slice(5,7))-1] + " " + moisAlerte.slice(0,4)} />
           <div style={S.cardList}>
             {alerts.map((al, i) => (
               <div key={i} style={{ background:"#FFFBEB", borderRadius:10, padding:"10px 14px", fontSize:12, color:"#92400E", borderLeft:"3px solid #D97706" }}>

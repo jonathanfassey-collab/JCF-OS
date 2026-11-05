@@ -588,6 +588,17 @@ function calcBlockedHours(c, bt, extra, rates) {
   if (bt==="month") return ct+x;
   return x;
 }
+// Avenants au contrat : nouvelles bases horaires à partir du mois indiqué (AAAA-MM)
+const CONTRACT_CHANGES = {
+  c3: [{ from:"2027-01", weeklyHours:32, contract:139 }], // Dozkhaz passe à 32 h au 01/01/2027
+};
+// Contrat applicable à un collaborateur pour un mois donné (surcharges éditées, puis avenants datés)
+function contractAt(c, ym, ex) {
+  let contract    = ex && ex.contract    !== undefined ? ex.contract    : c.contract;
+  let weeklyHours = ex && ex.weeklyHours !== undefined ? ex.weeklyHours : c.weeklyHours;
+  (CONTRACT_CHANGES[c.id] || []).forEach(ch => { if (ym >= ch.from) { contract = ch.contract; weeklyHours = ch.weeklyHours; } });
+  return { contract, weeklyHours };
+}
 // Retourne le collaborateur avec ses surcharges editees (contrat, heures hebdo)
 function effectiveCollab(c, collabExtras) {
   const ex = (collabExtras||COLLAB_EXTRA)[c.id] || {};
@@ -2643,7 +2654,7 @@ function ReplacementSpace({ user, onLogout, onRefresh, assignments, addCpRequest
               const hJour    = myEx.weeklyHours ? Math.round(myEx.weeklyHours/5*10)/10 : 8;
               const cpPosesMois = monthA.filter(a=>a.typeId==="cp"||a.typeId==="css").length;
               const heuresCPMois = cpPosesMois * hJour;
-              const cont     = Math.max(0, (collab?collab.contract:0) - heuresCPMois);
+              const cont     = Math.max(0, (collab?contractAt(collab, monthStr, myEx).contract:0) - heuresCPMois);
               const diff     = planned-cont;
               const pct      = cont>0?Math.min(100,Math.round((planned/cont)*100)):0;
               return (
@@ -2836,7 +2847,7 @@ function AdminDashboard({ assignments, setModal, rates }) {
   const mGroups  = groupMissions(todayA);
   // Heures sup : heures planifiées du mois en cours comparées au contrat mensuel
   const moisAlerte = TODAY.slice(0,7);
-  const alerts   = COLLABORATORS.map(c => { const ph=calcHours(assignments.filter(a=>a.collaboratorId===c.id && a.date.startsWith(moisAlerte))); const over=Math.round((ph-c.contract)*10)/10; return over>0?{name:c.name,over}:null; }).filter(Boolean);
+  const alerts   = COLLABORATORS.map(c => { const ph=calcHours(assignments.filter(a=>a.collaboratorId===c.id && a.date.startsWith(moisAlerte))); const over=Math.round((ph-contractAt(c,moisAlerte).contract)*10)/10; return over>0?{name:c.name,over}:null; }).filter(Boolean);
 
   return (
     <div style={S.page}>
@@ -3224,8 +3235,9 @@ function CollaboratorsView({ assignments, setModal, jobCategories, skills, secto
           const ex      = collabExtras[c.id] || {};
           const moisEnCours = new Date().toISOString().slice(0, 7);
           const planned = calcHours(assignments.filter(a => a.collaboratorId===c.id && a.date.startsWith(moisEnCours)));
-          const pct     = Math.min(100, Math.round((planned/c.contract)*100));
-          const over    = planned > c.contract;
+          const ctr     = contractAt(c, moisEnCours).contract;
+          const pct     = Math.min(100, Math.round((planned/ctr)*100));
+          const over    = planned > ctr;
           const inactive = ex.status === "inactive";
           return (
             <div key={c.id} style={{ ...S.card, opacity: inactive ? 0.55 : 1 }} onClick={() => setSel(c)}>
@@ -3241,7 +3253,7 @@ function CollaboratorsView({ assignments, setModal, jobCategories, skills, secto
                 </div>
               </div>
               <div style={{ textAlign:"right" }}>
-                <div style={{ fontSize:12, fontWeight:700, color: over ? "#C0392B" : "#2E8B57" }}>{over?"+":""}{over?planned-c.contract:c.contract-planned}h</div>
+                <div style={{ fontSize:12, fontWeight:700, color: over ? "#C0392B" : "#2E8B57" }}>{over?"+":""}{Math.round(Math.abs(planned-ctr)*100)/100}h</div>
                 <div style={{ fontSize:10, color:"#9CA3AF" }}>{over?"sup":"restant"}</div>
               </div>
             </div>
@@ -3260,9 +3272,12 @@ function CollaboratorsView({ assignments, setModal, jobCategories, skills, secto
 function CollaboratorDetail({ c, assignments, onBack, setModal, collabExtras, updateCollabExtra }) {
   const ex      = collabExtras[c.id] || {};
   const myA     = assignments.filter(a => a.collaboratorId===c.id);
-  const planned = calcHours(myA);
-  const over    = planned > c.contract;
-  const pct     = Math.min(100, Math.round((planned/c.contract)*100));
+  // Compteur du mois en cours (et non de toute l'année) face au contrat mensuel applicable
+  const moisDetail = TODAY.slice(0,7);
+  const ctrDetail  = contractAt(c, moisDetail, ex).contract;
+  const planned = calcHours(myA.filter(a => a.date.startsWith(moisDetail)));
+  const over    = planned > ctrDetail;
+  const pct     = Math.min(100, Math.round((planned/ctrDetail)*100));
   const [tab, setTab]             = useState("info"); // "info"|"planning"|"hours"|"partner"
   const [planView, setPlanView]   = useState("week"); // "week"|"cal"
   const [planWeek, setPlanWeek]   = useState(getCurrentMonday());
@@ -3302,7 +3317,7 @@ function CollaboratorDetail({ c, assignments, onBack, setModal, collabExtras, up
       {/* KPIs */}
       <div style={S.kpiRow}>
         <KpiBox value={planned+"h"} label="Planifiees" color="#1E2F4F" />
-        <KpiBox value={Math.abs(planned-c.contract)+"h"} label={over?"Sup":"Restantes"} color={over?"#C0392B":"#2E8B57"} />
+        <KpiBox value={Math.round(Math.abs(planned-ctrDetail)*100)/100+"h"} label={over?"Sup":"Restantes"} color={over?"#C0392B":"#2E8B57"} />
         <KpiBox value={pct+"%"}     label="Occupation" color="#D4AF37" />
       </div>
       <div style={{ padding:"0 16px 8px" }}>
@@ -3554,13 +3569,13 @@ function CollaboratorDetail({ c, assignments, onBack, setModal, collabExtras, up
           <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
             <button onClick={()=>{if(hMonth===0){setHYear(y=>y-1);setHMonth(11);}else setHMonth(m=>m-1);}} style={{ ...S.btn, padding:"5px 12px", background:"#F8F9FB", color:"#1E2F4F", fontSize:16 }}>&#8249;</button>
             <div style={{ flex:1, textAlign:"center", fontWeight:700, fontSize:14, color:"#1E2F4F" }}>{MONTH_NAMES[hMonth]} {hYear}</div>
-            <button onClick={()=>{setHYear(2026);setHMonth(5);}} style={{ ...S.btn, padding:"5px 10px", background:"#FFFBEB", color:"#1E2F4F", fontSize:11 }}>Auj.</button>
+            <button onClick={()=>{const n=new Date();setHYear(n.getFullYear());setHMonth(n.getMonth());}} style={{ ...S.btn, padding:"5px 10px", background:"#FFFBEB", color:"#1E2F4F", fontSize:11 }}>Auj.</button>
             <button onClick={()=>{if(hMonth===11){setHYear(y=>y+1);setHMonth(0);}else setHMonth(m=>m+1);}} style={{ ...S.btn, padding:"5px 12px", background:"#F8F9FB", color:"#1E2F4F", fontSize:16 }}>&#8250;</button>
           </div>
           {(()=>{
             const monthStr = hYear+"-"+String(hMonth+1).padStart(2,"0");
             const ex = (collabExtras||{})[c.id]||{};
-            const contract = ex.contract!==undefined?ex.contract:c.contract;
+            const contract = contractAt(c, monthStr, ex).contract;
             const planned  = calcHours(myA.filter(a=>a.date.startsWith(monthStr)));
             const diff     = planned-contract;
             const pct      = contract>0?Math.min(100,Math.round((planned/contract)*100)):0;
@@ -3692,11 +3707,12 @@ function HoursView({ assignments, collabExtras }) {
       {/* Liste collaborateurs */}
       {COLLABORATORS.map(c => {
         const ex      = (collabExtras||{})[c.id] || {};
-        const contract= ex.contract !== undefined ? ex.contract : c.contract;
+        const ctrH    = contractAt(c, mode==="week" ? weekStart.slice(0,7) : monthStr, ex);
+        const contract= ctrH.contract;
         const colabA  = filteredA.filter(a => a.collaboratorId===c.id);
         const planned = calcHours(colabA);
         // Déduire les jours CP et CSS du contrat de référence
-        const hJour   = ex.weeklyHours ? Math.round(ex.weeklyHours/5*10)/10 : 8;
+        const hJour   = ctrH.weeklyHours ? Math.round(ctrH.weeklyHours/5*10)/10 : 8;
         const absJours= colabA.filter(a => a.typeId==="cp"||a.typeId==="css").length;
         const absH    = absJours * hJour;
         const ref     = mode==="week"
@@ -4014,9 +4030,12 @@ function AssignmentModal({ modal, onClose, addAssignment, updateAssignment, dele
   const defaultHours = useMemo(() => {
     if (!collabId) return 8;
     const r = (rates || INITIAL_RATES)[collabId];
-    if (!r || !r.weeklyHours) return 8;
-    return Math.round(r.weeklyHours / 5 * 10) / 10; // weeklyHours / 5 jours
-  }, [collabId, rates]);
+    // Un avenant daté (ex. passage à 32 h) prime sur la base de la grille tarifaire
+    const ch = (CONTRACT_CHANGES[collabId] || []).filter(x => (date || "").slice(0,7) >= x.from).pop();
+    const wh = ch ? ch.weeklyHours : (r && r.weeklyHours);
+    if (!wh) return 8;
+    return Math.round(wh / 5 * 10) / 10; // heures hebdo / 5 jours
+  }, [collabId, rates, date]);
   const isWork = isWorkType(typeId);
   const withHours = countsHoursType(typeId);
 

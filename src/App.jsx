@@ -582,7 +582,7 @@ function calcBlockedHours(c, bt, extra, rates) {
   const r  = rates && c ? (rates[c.id]||{}) : {};
   const wh = ir.weeklyHours || r.weeklyHours || (c && c.weeklyHours) || 35;
   const ct = ir.weeklyHours ? Math.round(ir.weeklyHours * 4.33) : ((c && c.contract) || 0);
-  if (bt==="day") return Math.round(wh/5*10)/10+x;
+  if (bt==="day") return dailyHours(wh)+x;
   if (bt==="week") return wh+x;
   if (bt==="fortnight") return wh*2+x;
   if (bt==="month") return ct+x;
@@ -592,6 +592,11 @@ function calcBlockedHours(c, bt, extra, rates) {
 const CONTRACT_CHANGES = {
   c3: [{ from:"2027-01", weeklyHours:32, contract:139 }], // Dozkhaz passe à 32 h au 01/01/2027
 };
+// Durée d'une journée type : les contrats de 32 h se font sur 4 jours de 8 h, les autres sur 5 jours
+function dailyHours(weeklyHours) {
+  if (!weeklyHours) return 8;
+  return weeklyHours === 32 ? 8 : Math.round(weeklyHours / 5 * 10) / 10;
+}
 // Contrat applicable à un collaborateur pour un mois donné (surcharges éditées, puis avenants datés)
 function contractAt(c, ym, ex) {
   let contract    = ex && ex.contract    !== undefined ? ex.contract    : c.contract;
@@ -2651,7 +2656,7 @@ function ReplacementSpace({ user, onLogout, onRefresh, assignments, addCpRequest
               const monthA   = myA.filter(a=>a.date.startsWith(monthStr));
               const planned  = calcHours(monthA);
               // Heures CP posées ce mois → à déduire du contrat
-              const hJour    = myEx.weeklyHours ? Math.round(myEx.weeklyHours/5*10)/10 : 8;
+              const hJour    = dailyHours(collab ? contractAt(collab, monthStr, myEx).weeklyHours : myEx.weeklyHours);
               const cpPosesMois = monthA.filter(a=>a.typeId==="cp"||a.typeId==="css").length;
               const heuresCPMois = cpPosesMois * hJour;
               const cont     = Math.max(0, (collab?contractAt(collab, monthStr, myEx).contract:0) - heuresCPMois);
@@ -3712,7 +3717,7 @@ function HoursView({ assignments, collabExtras }) {
         const colabA  = filteredA.filter(a => a.collaboratorId===c.id);
         const planned = calcHours(colabA);
         // Déduire les jours CP et CSS du contrat de référence
-        const hJour   = ctrH.weeklyHours ? Math.round(ctrH.weeklyHours/5*10)/10 : 8;
+        const hJour   = dailyHours(ctrH.weeklyHours);
         const absJours= colabA.filter(a => a.typeId==="cp"||a.typeId==="css").length;
         const absH    = absJours * hJour;
         const ref     = mode==="week"
@@ -4033,8 +4038,7 @@ function AssignmentModal({ modal, onClose, addAssignment, updateAssignment, dele
     // Un avenant daté (ex. passage à 32 h) prime sur la base de la grille tarifaire
     const ch = (CONTRACT_CHANGES[collabId] || []).filter(x => (date || "").slice(0,7) >= x.from).pop();
     const wh = ch ? ch.weeklyHours : (r && r.weeklyHours);
-    if (!wh) return 8;
-    return Math.round(wh / 5 * 10) / 10; // heures hebdo / 5 jours
+    return dailyHours(wh); // 32 h → 4 jours de 8 h ; sinon heures hebdo / 5
   }, [collabId, rates, date]);
   const isWork = isWorkType(typeId);
   const withHours = countsHoursType(typeId);
@@ -6122,7 +6126,7 @@ function calcCPSolde(collabId, cpHours, assignments) {
   const jours = cpPoses.length;
   // Heures posées = nombre de jours × heures journalières du collaborateur
   const ex = (typeof COLLAB_EXTRA !== "undefined" ? COLLAB_EXTRA : {})[collabId] || {};
-  const hJour = ex.weeklyHours ? Math.round(ex.weeklyHours / 5 * 10) / 10 : 8;
+  const hJour = dailyHours(ex.weeklyHours !== undefined ? ex.weeklyHours : (COLLABORATORS.find(c => c.id === collabId) || {}).weeklyHours);
   const heuresPosees = jours * hJour;
   const joursTotal = Math.round((cpHours||0) / hJour);
   const joursTotal26 = 26; // Luxembourg : 26 jours légaux

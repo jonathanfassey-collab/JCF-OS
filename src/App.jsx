@@ -128,8 +128,8 @@ const STORES = [
   { id:"l5",  name:"Frouard"         }, { id:"l6",  name:"Bouxieres"       },
   { id:"l7",  name:"St Avold"        }, { id:"l8",  name:"Faulquemont"     },
   { id:"l9",  name:"Longeville"      }, { id:"l10", name:"Fameck"          },
-  { id:"l11", name:"Hagondange"      }, { id:"l12", name:"Luxembourg"      },
-  { id:"l13", name:"Revin"           }, { id:"l14", name:"Givet"           },
+  { id:"l11", name:"Hagondange"      }, { id:"l13", name:"Revin"           },
+  { id:"l14", name:"Givet"           },
   { id:"l15", name:"Sedan"           }, { id:"l16", name:"Rethel"          },
   { id:"l17", name:"Reims"           }, { id:"l18", name:"Epinal"          },
   { id:"l19", name:"Charmes"         }, { id:"l20", name:"Mirecourt"       },
@@ -138,6 +138,7 @@ const STORES = [
   { id:"l25", name:"Hettange-Grande" }, { id:"l26", name:"Clouange"        },
   { id:"l27", name:"Haguenau"        }, { id:"l28", name:"Toul"            },
   { id:"l29", name:"Place de Paris"  }, { id:"l30", name:"Strassen"        },
+  { id:"l31", name:"Faulquemont Super U" },
 ];
 
 const MISSIONS = [
@@ -171,6 +172,9 @@ const ABSENCE_TYPES = [
   { id:"maladie",  name:"Maladie",  countsHours:false, color:"#C0392B", bg:"#FEF2F2", textColor:"#B91C1C" },
   { id:"absence",  name:"Absence",  countsHours:false, color:"#C0392B", bg:"#FEF2F2", textColor:"#B91C1C" },
   { id:"recup",    name:"Recup",    countsHours:false, color:"#5D84C3", bg:"#EFF6FF", textColor:"#1D4ED8" },
+  { id:"css",      name:"Conge sans solde", countsHours:false, color:"#A16207", bg:"#FEFCE8", textColor:"#854D0E" },
+  // Journée de formation : notée au planning, sans heures ni CA (comme le siège)
+  { id:"formation", name:"Formation", countsHours:false, color:"#7C3AED", bg:"#F5F3FF", textColor:"#6D28D9" },
   // Présence au siège selon le rythme déclaré par l'employeur (ne compte ni heures ni CA)
   { id:"siege",    name:"Siege JCF (declare)", countsHours:false, color:"#2D456B", bg:"#EEF2F8", textColor:"#2D456B" },
   // Passage dans un magasin attesté par le planning du magasin (ne compte ni heures ni CA)
@@ -365,7 +369,6 @@ const ACCOUNT_DIRECTORY = [
   { name:"Jonathan",       role:"admin",       login:"admin@jcf.lu" },
 
   // Magasins et partenaires — [lieu]@jcf.lu
-  { name:"Luxembourg",      role:"store", login:"luxembourg@jcf.lu", locationId:"l12" },
   { name:"PAM",            role:"store", login:"pam@jcf.lu", locationId:"l1"  },
   { name:"Nancy centre",   role:"store", login:"nancy@jcf.lu", locationId:"l2"  },
   { name:"FOYER",          role:"store", login:"foyer@jcf.lu", locationId:"m4"  },

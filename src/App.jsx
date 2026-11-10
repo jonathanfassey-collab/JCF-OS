@@ -1599,6 +1599,7 @@ function AdminSpace({ user, onLogout, onRefresh, assignments, addAssignment, upd
               const collab = COLLABORATORS.find(c => c.id===req.collaboratorId);
               return <CPRequestCard key={req.id} req={{...req, isCss:true}} collab={collab} onValidate={validateCssRequest} onRefuse={refuseCssRequest} />;
             })}
+            <RecupRecap assignments={assignments} collabExtras={collabExtras} />
           </div>
         )}
         {tab==="collaborators" && <CollaboratorsView {...props} jobCategories={INITIAL_JOB_CATEGORIES} skills={INITIAL_SKILLS} sectors={INITIAL_SECTORS} collabExtras={collabExtras} updateCollabExtra={updateCollabExtra} dynCollaborators={dynCollaborators} addCollaborator={addCollaborator} />}
@@ -1622,6 +1623,66 @@ function AdminSpace({ user, onLogout, onRefresh, assignments, addAssignment, upd
 // réinitialise et les désactive. Aucun e-mail n'est jamais envoyé.
 const ROLE_LABELS = { admin:"Admin", store:"Magasin / partenaire", replacement:"Collaborateur" };
 const MIN_PASSWORD = 10;
+
+// Récapitulatif admin des récupérations : un compteur par collaborateur (même calcul que la carte « Récupération »)
+function RecupRecap({ assignments, collabExtras }) {
+  const r1 = x => Math.round(x * 10) / 10;
+  const rows = COLLABORATORS.filter(c => !ASSOCIATES.includes(c.id)).map(c => {
+    const ex = (collabExtras || {})[c.id] || {};
+    const mine = (assignments || []).filter(a => a.collaboratorId === c.id);
+    if (!mine.length) return null;
+    const declared = ex.recupHours != null;
+    const base  = declared ? ex.recupHours : 0;
+    const since = declared ? ex.recupDate : (TODAY.slice(0, 4) - 1) + "-12-31";
+    const acquis = holidayRecupCredits(c.id, assignments, since, TODAY).reduce((s, h) => s + h.hours, 0);
+    const poses  = mine.filter(a => a.typeId === "recup" && (!since || a.date > since));
+    const passees = poses.filter(a => a.date <= TODAY).reduce((s, a) => s + recupHoursOf(a), 0);
+    const aVenir  = poses.filter(a => a.date > TODAY).reduce((s, a) => s + recupHoursOf(a), 0);
+    const reste = base + acquis - passees - aVenir;
+    if (!declared && !acquis && !passees && !aVenir) return null;
+    // Magasin principal : lieu le plus fréquent de ses journées de travail sur ±60 jours
+    const lo = new Date(); lo.setDate(lo.getDate() - 60); const hi = new Date(); hi.setDate(hi.getDate() + 60);
+    const near = mine.filter(a => isWorkType(a.typeId) && a.date >= lo.toISOString().slice(0, 10) && a.date <= hi.toISOString().slice(0, 10));
+    const count = {}; near.forEach(a => { count[a.locationId] = (count[a.locationId] || 0) + 1; });
+    const main = Object.keys(count).sort((x, y) => count[y] - count[x])[0];
+    return { c, store: main ? getLocName(main) : "—", base, since: declared ? ex.recupDate : "", acquis, passees, aVenir, reste,
+             hj: dailyHours(contractAt(c, TODAY.slice(0, 7)).weeklyHours) };
+  }).filter(Boolean).sort((x, y) => y.reste - x.reste);
+  if (!rows.length) return null;
+  const cell = { padding:"6px 4px", borderBottom:"1px solid #F0F0F0", fontVariantNumeric:"tabular-nums", textAlign:"right" };
+  return (
+    <div>
+      <SectionTitle title="Recuperations" sub={rows.length + " collaborateurs"} />
+      <div style={{ background:"#ffffff", borderRadius:12, padding:"8px 10px", boxShadow:"0 1px 4px rgba(30,47,79,.06)", overflowX:"auto", marginBottom:16 }}>
+        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
+          <thead>
+            <tr style={{ color:"#9CA3AF" }}>
+              {["Collaborateur", "Magasin", "Solde declare", "Feries acquis", "Posees", "A venir", "Reste a poser"].map((h, i) => (
+                <th key={h} style={{ ...cell, textAlign: i < 2 ? "left" : "right", fontWeight:600 }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.c.id}>
+                <td style={{ ...cell, textAlign:"left", fontWeight:600, color:"#1E2F4F" }}>{r.c.name}</td>
+                <td style={{ ...cell, textAlign:"left", color:"#6B7280" }}>{r.store}</td>
+                <td style={cell}>{r.since ? r1(r.base) + "h" : "—"}{r.since && <div style={{ fontSize:9, color:"#9CA3AF" }}>au {r.since.split("-").reverse().join("/")}</div>}</td>
+                <td style={{ ...cell, color:"#2D456B" }}>{r.acquis ? "+" + r1(r.acquis) + "h" : "—"}</td>
+                <td style={cell}>{r.passees ? r1(r.passees) + "h" : "—"}</td>
+                <td style={{ ...cell, color:"#6B7280" }}>{r.aVenir ? r1(r.aVenir) + "h" : "—"}</td>
+                <td style={{ ...cell, fontWeight:700, color: r.reste > 0 ? "#2E8B57" : r.reste < 0 ? "#C0392B" : "#1E2F4F" }}>
+                  {r1(r.reste)}h<div style={{ fontSize:9, color:"#9CA3AF", fontWeight:400 }}>~{r1(r.reste / r.hj)} j</div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div style={{ fontSize:9, color:"#9CA3AF", marginTop:6 }}>Reste à poser = solde déclaré + fériés tombés sur un repos − récups posées − récups à venir. Sans solde déclaré, le compteur part du 1er janvier.</div>
+      </div>
+    </div>
+  );
+}
 
 function AccountsView({ user, dynCollaborators, collabExtras }) {
   const [profiles, setProfiles] = useState([]);

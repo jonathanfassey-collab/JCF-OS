@@ -758,6 +758,15 @@ export default function App() {
         if (cpRows  && Array.isArray(cpRows))   setCpRequests(cpRows.map(rowToCp));
         if (cssRows && Array.isArray(cssRows))  setCssRequests(cssRows.map(rowToCp));
         if (isRepl) applyHr(await supaFetch("collaborator_hr", "GET", null, "select=*"));
+        if (u.role === "store") {
+          // Récupérations gérées par la directrice du magasin pour son équipe
+          const [staffRows, balRows] = await Promise.all([
+            supaFetchAll("rpc/jcf_store_staff_planning", "POST", {}, "order=date.asc,id.asc"),
+            supaFetch("rpc/jcf_store_recup_balances", "POST", {}),
+          ]);
+          if (Array.isArray(staffRows)) setStoreStaff(staffRows.map(rowToAsg));
+          if (Array.isArray(balRows)) setStoreRecupBal(balRows);
+        }
       }
     } catch(e) { console.error("Supabase load error:", e); }
     finally { if (showLoading) setLoading(false); }
@@ -882,6 +891,8 @@ export default function App() {
 
   const [cssRequests, setCssRequests] = useState([]);
   const [charges, setCharges] = useState([]);
+  const [storeStaff, setStoreStaff]       = useState([]);
+  const [storeRecupBal, setStoreRecupBal] = useState([]);
   const addCssRequest = async (req) => {
     const entry = { ...req, id:"css-"+Date.now(), type:"css" };
     setCssRequests(p => [...p, entry]);
@@ -995,7 +1006,7 @@ export default function App() {
 
   HIDE_PRICES = !canSeePrices(user);
   if (user.role === "admin")       return (<AdminSpace       user={user} onLogout={logout} {...props} charges={charges} updateRate={updateRate} cpRequests={cpRequests} validateCpRequest={validateCpRequest} refuseCpRequest={refuseCpRequest} cssRequests={cssRequests} validateCssRequest={validateCssRequest} refuseCssRequest={refuseCssRequest} onRefresh={refreshData} />);
-  if (user.role === "store")       return (<StoreSpace       user={user} onLogout={logout} {...props} onRefresh={refreshData} />);
+  if (user.role === "store")       return (<StoreSpace       user={user} onLogout={logout} {...props} onRefresh={refreshData} staffRows={storeStaff} recupBalances={storeRecupBal} />);
   if (user.role === "replacement") return (<ReplacementSpace user={user} onLogout={logout} {...props} addCpRequest={addCpRequest} cpRequests={cpRequests} addCssRequest={addCssRequest} cssRequests={cssRequests} onRefresh={refreshData} />);
   return null;
 }
@@ -2416,7 +2427,77 @@ function ReservationDetail({ assignment, rates, onClose, onCancel, onCancelLate 
 // ════════════════════════════════════════════════════════════
 // ESPACE MAGASIN
 // ════════════════════════════════════════════════════════════
-function StoreSpace({ user, onLogout, onRefresh, assignments, addAssignment, deleteAssignment, rates }) {
+// Onglet « Récup » d'un magasin : la directrice pose et retire les journées de récupération de son équipe
+function StoreRecupTab({ user, staffIds, staffRows, balances, addAssignment, deleteAssignment, onRefresh }) {
+  const [collabId, setCollabId] = useState(staffIds[0] || "");
+  const [date,     setDate]     = useState(TODAY);
+  const [hours,    setHours]    = useState(8);
+  const [msg,      setMsg]      = useState("");
+  const [busy,     setBusy]     = useState(false);
+  const collab = COLLABORATORS.find(c => c.id === collabId);
+  const hj = collab ? dailyHours(contractAt(collab, (date || TODAY).slice(0, 7)).weeklyHours) : 8;
+  const bal = id => balances.find(b => b.collaborator_id === id) || {};
+  const upcoming = staffRows.filter(a => a.typeId === "recup" && a.date >= TODAY && staffIds.includes(a.collaboratorId))
+    .sort((x, y) => x.date.localeCompare(y.date));
+
+  const poser = async () => {
+    if (!collabId || !date) return;
+    setMsg(""); setBusy(true);
+    try {
+      const existing = staffRows.find(a => a.collaboratorId === collabId && a.date === date);
+      if (existing && existing.typeId === "recup") { setMsg("Une récup est déjà posée ce jour-là."); return; }
+      if (existing && !(isWorkType(existing.typeId) && existing.locationId === user.locationId)) {
+        setMsg("Ce jour n'est pas une journée de travail dans votre magasin (" + getLocName(existing.locationId || existing.typeId) + ") : contactez JCF pour le modifier.");
+        return;
+      }
+      if (existing) await deleteAssignment(existing.id);
+      await addAssignment({ collaboratorId:collabId, date, locationId:"recup", typeId:"recup", hours: hours || hj });
+      setMsg("Récup posée : " + (collab ? collab.name : "") + ", " + fmtDateFR(date) + " (" + (hours || hj) + "h).");
+      onRefresh && onRefresh();
+    } finally { setBusy(false); }
+  };
+  const retirer = async a => { await deleteAssignment(a.id); onRefresh && onRefresh(); };
+
+  return (
+    <div style={{ padding:"0 16px" }}>
+      <SectionTitle title="Recuperations" sub="Equipe du magasin" />
+      {staffIds.map(id => (
+        <div key={id}>
+          <div style={{ fontWeight:700, fontSize:13, color:"#1E2F4F", margin:"6px 0 4px" }}>{(COLLABORATORS.find(c => c.id === id) || {}).name || id}</div>
+          <RecupSoldeCard collabId={id} hours={bal(id).recup_balance_hours != null ? Number(bal(id).recup_balance_hours) : null}
+            date={bal(id).recup_balance_date || ""} assignments={staffRows} />
+        </div>
+      ))}
+      <div style={{ background:"#ffffff", borderRadius:12, padding:"14px", margin:"8px 0", boxShadow:"0 1px 4px rgba(30,47,79,.06)" }}>
+        <div style={{ fontWeight:700, fontSize:13, color:"#1E2F4F", marginBottom:8 }}>Poser une recup</div>
+        <FormLabel text="Collaborateur" />
+        <select style={S.input} value={collabId} onChange={e => setCollabId(e.target.value)}>
+          {staffIds.map(id => <option key={id} value={id}>{(COLLABORATORS.find(c => c.id === id) || {}).name || id}</option>)}
+        </select>
+        <FormLabel text="Date" />
+        <input type="date" style={S.input} value={date} onChange={e => setDate(e.target.value)} />
+        <FormLabel text={"Heures recuperees (journee type : " + hj + "h)"} />
+        <input type="number" style={S.input} value={hours} min={0.5} max={24} step={0.5} onChange={e => setHours(+e.target.value)} />
+        <div style={{ fontSize:10, color:"#9CA3AF", marginBottom:8 }}>La journée de travail prévue dans votre magasin ce jour-là est remplacée par la récup, déduite du compteur.</div>
+        <button style={{ ...S.btnGold, width:"100%", opacity: busy ? .6 : 1 }} disabled={busy} onClick={poser}>Poser la recup</button>
+        {msg && <div style={{ fontSize:12, color:"#1E2F4F", marginTop:8 }}>{msg}</div>}
+      </div>
+      <SectionTitle title="Recups a venir" sub={upcoming.length + " jour" + (upcoming.length > 1 ? "s" : "")} />
+      {upcoming.length === 0 ? <Empty text="Aucune recup a venir" /> : upcoming.map(a => (
+        <div key={a.id} style={{ ...S.card, justifyContent:"space-between" }}>
+          <div>
+            <div style={{ fontWeight:600, fontSize:13, color:"#1E2F4F" }}>{(COLLABORATORS.find(c => c.id === a.collaboratorId) || {}).name}</div>
+            <div style={{ fontSize:11, color:"#6B7280" }}>{fmtDateFR(a.date)} · {recupHoursOf(a)}h</div>
+          </div>
+          <button style={{ ...S.btn, fontSize:11, padding:"6px 10px", background:"#FEF2F2", color:"#C0392B" }} onClick={() => retirer(a)}>Retirer</button>
+        </div>
+      ))}
+      <div style={{ fontSize:10, color:"#9CA3AF", margin:"6px 0 16px" }}>Une récup retirée libère la journée : pensez à replanifier la personne si besoin.</div>
+    </div>
+  );
+}
+
+function StoreSpace({ user, onLogout, onRefresh, assignments, addAssignment, deleteAssignment, rates, staffRows, recupBalances }) {
   const [tab,         setTab]    = useState("calendar");
   const [selDate,     setSelDate]= useState(TODAY);
   const [resModal,    setResMod] = useState(null);
@@ -2455,11 +2536,13 @@ function StoreSpace({ user, onLogout, onRefresh, assignments, addAssignment, del
     return gs;
   }, [myReservations]);
 
+  // Équipe du magasin : collaborateurs qui y travaillent (récupérations gérées par la directrice)
+  const staffIds = useMemo(() => [...new Set((staffRows || []).filter(a => a.locationId === user.locationId && isWorkType(a.typeId)).map(a => a.collaboratorId))], [staffRows, user.locationId]);
   const tabs = [
     { id:"calendar",     icon:"\uD83D\uDDD3", label:"Calendrier"  },
     { id:"available",    icon:"\u2705",        label:"Disponibles" },
     { id:"reservations", icon:"\uD83D\uDCCB",  label:"Reservations"},
-  ];
+  ].concat(staffIds.length ? [{ id:"recup", icon:"\u23F3", label:"Recup" }] : []);
 
   return (
     <div style={S.app}>
@@ -2470,6 +2553,11 @@ function StoreSpace({ user, onLogout, onRefresh, assignments, addAssignment, del
           <div style={{ fontSize:10, color:"rgba(255,255,255,.5)", textTransform:"uppercase", letterSpacing:"0.5px" }}>Espace partenaire</div>
           <div style={{ fontSize:18, fontWeight:700 }}>{(myLoc||{}).name||user.name}</div>
         </div>
+
+        {tab==="recup" && (
+          <StoreRecupTab user={user} staffIds={staffIds} staffRows={staffRows || []} balances={recupBalances || []}
+            addAssignment={addAssignment} deleteAssignment={deleteAssignment} onRefresh={onRefresh} />
+        )}
 
         {tab==="calendar" && (
           <StoreCalendar myReservations={myReservations} rates={rates} locationId={user.locationId} onClickEntry={a => setDetail(a)} />

@@ -640,6 +640,65 @@ function billedCost(a, rates) {
   }
   return 0;
 }
+// ─── Jours fériés et récupération ───────────────────────────────────────────
+// Règle JCF (tous les collaborateurs du planning) : un jour férié qui tombe un dimanche ou un jour de repos
+// du planning donne droit à une journée de récupération, créditée automatiquement au compteur de récup.
+function easterSunday(y) {
+  const a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4;
+  const f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31), day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(Date.UTC(y, month - 1, day));
+}
+function holidaysFor(y, country) {
+  const iso = d => d.toISOString().slice(0, 10);
+  const easter = easterSunday(y);
+  const plus = n => { const d = new Date(easter); d.setUTCDate(d.getUTCDate() + n); return iso(d); };
+  const fixed = (mm, dd, label) => ({ date: y + "-" + mm + "-" + dd, label });
+  const common = [fixed("01", "01", "Jour de l'an"), { date: plus(1), label: "Lundi de Paques" }, fixed("05", "01", "Fete du travail"),
+    { date: plus(39), label: "Ascension" }, { date: plus(50), label: "Lundi de Pentecote" }, fixed("08", "15", "Assomption"),
+    fixed("11", "01", "Toussaint"), fixed("12", "25", "Noel")];
+  const extra = country === "LU"
+    ? [fixed("05", "09", "Journee de l'Europe"), fixed("06", "23", "Fete nationale"), fixed("12", "26", "Saint-Etienne")]
+    : [fixed("05", "08", "Victoire 1945"), fixed("07", "14", "Fete nationale"), fixed("11", "11", "Armistice")];
+  return common.concat(extra).sort((x, z) => x.date.localeCompare(z.date));
+}
+// Calendrier des fériés suivi par chaque collaborateur : Luxembourg pour ceux qui travaillent au Luxembourg
+const HOLIDAY_COUNTRY = { c3:"LU", c9:"LU", c11:"LU", c21:"LU" };
+const ASSOCIATES = ["c13", "c14", "c15", "c17", "c18", "c19", "c20"];
+function holidayCountry(cId) { return HOLIDAY_COUNTRY[cId] || "FR"; }
+// Fériés tombés un dimanche ou un jour de repos du planning → une journée de récup chacun
+function holidayRecupCredits(cId, assignments, fromDate, toDate) {
+  if (ASSOCIATES.includes(cId)) return [];
+  const mine = (assignments || []).filter(a => a.collaboratorId === cId);
+  if (!mine.length) return [];
+  const first = mine.reduce((m, a) => (a.date < m ? a.date : m), mine[0].date);
+  const last  = mine.reduce((m, a) => (a.date > m ? a.date : m), mine[0].date);
+  const c = COLLABORATORS.find(x => x.id === cId);
+  const ex = (COLLAB_EXTRA || {})[cId] || {};
+  // Jours de repos habituels : jours de semaine notés « Repos » au moins 3 fois sur 10 dans son planning.
+  // Un « Repos » posé sur un férié un autre jour correspond au férié lui-même (magasin fermé) : pas de récup.
+  const tally = Array.from({ length: 7 }, () => ({ off: 0, all: 0 }));
+  mine.forEach(a => {
+    if (!["repos", "dimanche", "work"].includes(a.typeId)) return;
+    const t = tally[new Date(a.date + "T12:00:00").getDay()];
+    t.all++; if (a.typeId !== "work") t.off++;
+  });
+  const habitualOff = dow => tally[dow].all > 0 && tally[dow].off / tally[dow].all >= 0.3;
+  const out = [];
+  for (let y = Number(first.slice(0, 4)); y <= Number(last.slice(0, 4)); y++) {
+    holidaysFor(y, holidayCountry(cId)).forEach(h => {
+      if (h.date < first || h.date > last || (fromDate && h.date <= fromDate) || (toDate && h.date > toDate)) return;
+      const dow = new Date(h.date + "T12:00:00").getDay();
+      const row = mine.find(a => a.date === h.date);
+      const offDay = dow === 0 || (habitualOff(dow) && (!row || ["repos", "dimanche"].includes(row.typeId))) || (!row && (ex.noWorkDays || []).includes(dow));
+      if (!offDay) return;
+      out.push({ date: h.date, label: h.label, hours: dailyHours(c ? contractAt(c, h.date.slice(0, 7)).weeklyHours : 40) });
+    });
+  }
+  return out;
+}
+
 // Retourne le collaborateur avec ses surcharges editees (contrat, heures hebdo)
 function effectiveCollab(c, collabExtras) {
   const ex = (collabExtras||COLLAB_EXTRA)[c.id] || {};
@@ -6353,18 +6412,25 @@ function CPSoldeCard({ collabId, cpHours, assignments, contractDate, cpDate }) {
 
 // Compteur de récupération : solde arrêté à une date (fiche RH), diminué des récups posées depuis
 function RecupSoldeCard({ collabId, hours, date, note, assignments }) {
-  if (hours == null) return null;
-  const poses = (assignments || []).filter(a => a.collaboratorId === collabId && a.typeId === "recup" && (!date || a.date > date))
+  if (ASSOCIATES.includes(collabId)) return null;
+  // Sans solde déclaré, le compteur part de 0 au 1er janvier de l'année en cours
+  const base  = hours != null ? hours : 0;
+  const since = hours != null ? date : (TODAY.slice(0, 4) - 1) + "-12-31";
+  const poses = (assignments || []).filter(a => a.collaboratorId === collabId && a.typeId === "recup" && (!since || a.date > since))
     .sort((x, y) => x.date.localeCompare(y.date));
   const pris = poses.reduce((s, a) => s + recupHoursOf(a), 0);
-  const reste = Math.round((hours - pris) * 100) / 100;
+  const credits = holidayRecupCredits(collabId, assignments, since, TODAY);
+  const aVenir  = holidayRecupCredits(collabId, assignments, TODAY, null);
+  const acquis  = credits.reduce((s, h) => s + h.hours, 0);
+  if (hours == null && !poses.length && !credits.length && !aVenir.length) return null;
+  const reste = Math.round((base + acquis - pris) * 100) / 100;
   const c = COLLABORATORS.find(x => x.id === collabId);
   const hj = dailyHours(c ? contractAt(c, TODAY.slice(0, 7)).weeklyHours : 40);
   return (
     <div style={{ background:"#ffffff", borderRadius:12, padding:"14px", marginBottom:8, boxShadow:"0 1px 4px rgba(30,47,79,.06)" }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
         <div style={{ fontSize:12, fontWeight:700, color:"#1E2F4F", textTransform:"uppercase", letterSpacing:"0.5px" }}>Recuperation (heures sup)</div>
-        <div style={{ fontSize:11, color:"#6B7280" }}>{date ? "Solde au " + fmtDateFR(date) + " : " + hours + "h" : hours + "h"}</div>
+        <div style={{ fontSize:11, color:"#6B7280" }}>{hours != null ? (date ? "Solde au " + fmtDateFR(date) + " : " + hours + "h" : hours + "h") : "Depuis le 1er janvier"}</div>
       </div>
       <div style={{ display:"flex", justifyContent:"space-between" }}>
         <div style={{ textAlign:"center" }}>
@@ -6372,13 +6438,27 @@ function RecupSoldeCard({ collabId, hours, date, note, assignments }) {
           <div style={{ fontSize:10, color:"#6B7280" }}>Solde restant (~{Math.round(reste / hj * 10) / 10} j)</div>
         </div>
         <div style={{ textAlign:"center" }}>
+          <div style={{ fontSize:18, fontWeight:800, color:"#2D456B" }}>+{Math.round(acquis * 100) / 100}h</div>
+          <div style={{ fontSize:10, color:"#6B7280" }}>Feries sur repos</div>
+        </div>
+        <div style={{ textAlign:"center" }}>
           <div style={{ fontSize:18, fontWeight:800, color:"#1E2F4F" }}>{Math.round(pris * 100) / 100}h</div>
           <div style={{ fontSize:10, color:"#6B7280" }}>Posees depuis</div>
         </div>
       </div>
+      {credits.length > 0 && (
+        <div style={{ fontSize:10, color:"#2D456B", marginTop:8 }}>
+          Acquis : {credits.map(h => h.label + " " + fmtDateFR(h.date) + " (+" + h.hours + "h)").join(" · ")}
+        </div>
+      )}
+      {aVenir.length > 0 && (
+        <div style={{ fontSize:10, color:"#9CA3AF", marginTop:4 }}>
+          A venir : {aVenir.map(h => h.label + " " + fmtDateFR(h.date) + " (+" + h.hours + "h)").join(" · ")}
+        </div>
+      )}
       {poses.length > 0 && (
-        <div style={{ fontSize:10, color:"#6B7280", marginTop:8 }}>
-          {poses.map(a => fmtDateFR(a.date) + " (" + recupHoursOf(a) + "h)").join(" · ")}
+        <div style={{ fontSize:10, color:"#6B7280", marginTop:4 }}>
+          Posees : {poses.map(a => fmtDateFR(a.date) + " (" + recupHoursOf(a) + "h)").join(" · ")}
         </div>
       )}
       {note && <div style={{ fontSize:10, color:"#9CA3AF", marginTop:6 }}>{note}</div>}

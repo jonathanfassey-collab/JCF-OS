@@ -629,7 +629,8 @@ function billedCost(a, rates) {
   if (["cp", "ferie", "maladie"].includes(a.typeId)) {
     const c = COLLABORATORS.find(x => x.id === a.collaboratorId);
     const wh = c ? contractAt(c, (a.date || "").slice(0, 7)).weeklyHours : 40;
-    return Math.round(rate * dailyHours(wh) * 100) / 100;
+    // Heures de l'absence telles que saisies (journée type par défaut)
+    return Math.round(rate * ((a.hours || 0) > 0 ? a.hours : dailyHours(wh)) * 100) / 100;
   }
   return 0;
 }
@@ -3316,6 +3317,82 @@ function CollaboratorsView({ assignments, setModal, jobCategories, skills, secto
   );
 }
 
+// Cumul annuel des heures : planifié (travail + absences payées) face au contrat, mois par mois et en cumul.
+// Mois retenus : ceux où le collaborateur a au moins une journée au planning. Le premier mois d'activité
+// est proratisé à partir de sa première journée ; les congés sans solde réduisent le contrat du mois.
+function AnnualHoursCard({ c, myA, ex }) {
+  const [year, setYear] = useState(new Date().getFullYear());
+  const r1  = x => Math.round(x * 10) / 10;
+  const fmt = x => (x > 0 ? "+" : "") + r1(x) + "h";
+  const firstDate = myA.reduce((m, a) => (!m || a.date < m ? a.date : m), "");
+  const curYm = TODAY.slice(0, 7);
+  const rows = [];
+  for (let m = 1; m <= 12; m++) {
+    const ym = year + "-" + String(m).padStart(2, "0");
+    const monthA = myA.filter(a => a.date.startsWith(ym));
+    if (!monthA.length) continue;
+    const ctr = contractAt(c, ym, ex);
+    let contract = ctr.contract;
+    if (firstDate.startsWith(ym)) {
+      const dim = new Date(year, m, 0).getDate();
+      contract = contract * (dim - Number(firstDate.slice(8, 10)) + 1) / dim;
+    }
+    contract -= monthA.filter(a => a.typeId === "css").length * dailyHours(ctr.weeklyHours);
+    contract = Math.max(0, contract);
+    const planned = calcHours(monthA);
+    rows.push({ ym, m, planned, contract, diff: planned - contract, past: ym <= curYm });
+  }
+  let run = 0;
+  rows.forEach(r => { run += r.diff; r.cumul = run; });
+  const sum = (list, k) => list.reduce((s, r) => s + r[k], 0);
+  const toDate = rows.filter(r => r.past);
+  const dDate = sum(toDate, "diff"), dYear = sum(rows, "diff");
+  const color = x => (x > 0.05 ? "#C0392B" : x < -0.05 ? "#2563EB" : "#2E8B57");
+  return (
+    <div style={{ background:"#ffffff", borderRadius:12, margin:"0 16px 12px", padding:"12px 14px", boxShadow:"0 1px 4px rgba(30,47,79,.06)" }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+        <span style={{ fontWeight:700, fontSize:13, color:"#1E2F4F" }}>Cumul annuel des heures</span>
+        <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+          <button onClick={() => setYear(y => y - 1)} style={{ ...S.btn, padding:"2px 8px", background:"#F8F9FB", color:"#1E2F4F" }}>&#8249;</button>
+          <span style={{ fontWeight:700, fontSize:13, color:"#1E2F4F" }}>{year}</span>
+          <button onClick={() => setYear(y => y + 1)} style={{ ...S.btn, padding:"2px 8px", background:"#F8F9FB", color:"#1E2F4F" }}>&#8250;</button>
+        </div>
+      </div>
+      {!rows.length ? <div style={{ fontSize:12, color:"#9CA3AF" }}>Aucune journée planifiée cette année.</div> : (
+        <div>
+          <div style={{ fontSize:10, color:"#9CA3AF", marginBottom:4 }}>
+            {toDate.length ? "À fin " + MONTH_NAMES[toDate[toDate.length - 1].m - 1].toLowerCase() : "Aucun mois écoulé"}
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6, marginBottom:8 }}>
+            {[["Planifiées", r1(sum(toDate, "planned")) + "h", "#1E2F4F"], ["Contrat", r1(sum(toDate, "contract")) + "h", "#6B7280"],
+              [dDate > 0.05 ? "Heures sup" : dDate < -0.05 ? "Heures manquantes" : "Équilibré", fmt(dDate), color(dDate)]].map(([l, v, col]) => (
+              <div key={l} style={{ background:"#F8F9FB", borderRadius:8, padding:"8px 6px", textAlign:"center" }}>
+                <div style={{ fontWeight:800, fontSize:15, color:col, fontVariantNumeric:"tabular-nums" }}>{v}</div>
+                <div style={{ fontSize:10, color:"#6B7280" }}>{l}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize:11, color:"#6B7280", marginBottom:8 }}>
+            Projection fin {year} : {r1(sum(rows, "planned"))}h planifiées pour {r1(sum(rows, "contract"))}h de contrat,{" "}
+            <span style={{ fontWeight:700, color:color(dYear) }}>{fmt(dYear)}</span>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1.2fr 1fr 1fr 1fr 1fr", fontSize:11, rowGap:3, fontVariantNumeric:"tabular-nums" }}>
+            {["Mois", "Planif.", "Contrat", "Écart", "Cumul"].map(h => <div key={h} style={{ color:"#9CA3AF", fontWeight:600 }}>{h}</div>)}
+            {rows.map(r => [
+              <div key={r.ym + "m"} style={{ color: r.past ? "#1E2F4F" : "#9CA3AF" }}>{MONTH_NAMES[r.m - 1].slice(0, 4)}</div>,
+              <div key={r.ym + "p"}>{r1(r.planned)}</div>,
+              <div key={r.ym + "c"}>{r1(r.contract)}</div>,
+              <div key={r.ym + "d"} style={{ color:color(r.diff) }}>{fmt(r.diff)}</div>,
+              <div key={r.ym + "u"} style={{ color:color(r.cumul), fontWeight:700 }}>{fmt(r.cumul)}</div>,
+            ])}
+          </div>
+          <div style={{ fontSize:9, color:"#9CA3AF", marginTop:6 }}>Mois en gris : à venir (planning prévisionnel). Congés payés, fériés et maladie comptent comme des heures ; les congés sans solde réduisent le contrat.</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CollaboratorDetail({ c, assignments, onBack, setModal, collabExtras, updateCollabExtra }) {
   const ex      = collabExtras[c.id] || {};
   const myA     = assignments.filter(a => a.collaboratorId===c.id);
@@ -3372,6 +3449,8 @@ function CollaboratorDetail({ c, assignments, onBack, setModal, collabExtras, up
           <div style={{ ...S.progressFill, width:pct+"%", background: over ? "#C0392B" : c.color }} />
         </div>
       </div>
+
+      <AnnualHoursCard c={c} myA={myA} ex={ex} />
 
       {/* Onglets */}
       <div style={{ display:"flex", padding:"0 16px 12px", gap:4, overflowX:"auto" }}>

@@ -178,10 +178,11 @@ const ALL_LOCATIONS = [...STORES, ...MISSIONS];
 const ABSENCE_TYPES = [
   { id:"repos",    name:"Repos",    countsHours:false, color:"#6B7280", bg:"#F3F4F6", textColor:"#4B5563" },
   { id:"dimanche", name:"Dimanche", countsHours:false, color:"#9CA3AF", bg:"#F9FAFB", textColor:"#6B7280" },
-  { id:"cp",       name:"Conges",   countsHours:false, color:"#8B5CF6", bg:"#F5F3FF", textColor:"#6D28D9" },
+  // Congés payés, fériés et maladie : payés par l'employeur, ils comptent dans les heures et sont facturés
+  { id:"cp",       name:"Conges",   countsHours:true, color:"#8B5CF6", bg:"#F5F3FF", textColor:"#6D28D9" },
   { id:"annulation", name:"Annulation", countsHours:false, color:"#C0392B", bg:"#FEF2F2", textColor:"#C0392B" },
-  { id:"ferie",    name:"Ferie",    countsHours:false, color:"#2E8B57", bg:"#ECFDF5", textColor:"#047857" },
-  { id:"maladie",  name:"Maladie",  countsHours:false, color:"#C0392B", bg:"#FEF2F2", textColor:"#B91C1C" },
+  { id:"ferie",    name:"Ferie",    countsHours:true, color:"#2E8B57", bg:"#ECFDF5", textColor:"#047857" },
+  { id:"maladie",  name:"Maladie",  countsHours:true, color:"#C0392B", bg:"#FEF2F2", textColor:"#B91C1C" },
   { id:"absence",  name:"Absence",  countsHours:false, color:"#C0392B", bg:"#FEF2F2", textColor:"#B91C1C" },
   { id:"recup",    name:"Recup",    countsHours:false, color:"#5D84C3", bg:"#EFF6FF", textColor:"#1D4ED8" },
   { id:"css",      name:"Conge sans solde", countsHours:false, color:"#A16207", bg:"#FEFCE8", textColor:"#854D0E" },
@@ -614,6 +615,24 @@ function contractAt(c, ym, ex) {
   (CONTRACT_CHANGES[c.id] || []).forEach(ch => { if (ym >= ch.from) { contract = ch.contract; weeklyHours = ch.weeklyHours; } });
   return { contract, weeklyHours };
 }
+// Taux horaire facturé = tarif mensuel de la grille ÷ heures mensuelles du contrat de la grille
+function gridHourlyRate(cId, ds, rates) {
+  const r = (ratesForDate(rates, ds) || {})[cId];
+  if (!r || !r.month || !r.weeklyHours) return 0;
+  return r.month / (r.weeklyHours * 52 / 12);
+}
+// Coût facturé d'une journée : travail = taux × heures ; congés payés, fériés, maladie = taux × journée type ; sinon 0
+function billedCost(a, rates) {
+  const rate = gridHourlyRate(a.collaboratorId, a.date, rates);
+  if (!rate) return 0;
+  if (isWorkType(a.typeId)) return Math.round(rate * (a.hours || 0) * 100) / 100;
+  if (["cp", "ferie", "maladie"].includes(a.typeId)) {
+    const c = COLLABORATORS.find(x => x.id === a.collaboratorId);
+    const wh = c ? contractAt(c, (a.date || "").slice(0, 7)).weeklyHours : 40;
+    return Math.round(rate * dailyHours(wh) * 100) / 100;
+  }
+  return 0;
+}
 // Retourne le collaborateur avec ses surcharges editees (contrat, heures hebdo)
 function effectiveCollab(c, collabExtras) {
   const ex = (collabExtras||COLLAB_EXTRA)[c.id] || {};
@@ -811,10 +830,18 @@ export default function App() {
 
   const addAssignment = async (a) => {
     const entry = { ...a, id: newId() };
+    // Saisie admin : coût calculé avec la grille. Les réservations magasin fixent déjà leur prix (periodCost).
+    if (entry.periodCost === undefined) entry.periodCost = billedCost(entry, rates);
     setAssignments(p => [...p, entry]);
     try { await supaFetch("assignments", "POST", asgToRow(entry)); } catch(e) {}
   };
   const updateAssignment = async (id, ch) => {
+    const prev = assignments.find(a => a.id===id);
+    // Recalcul du coût si la journée était tarifée selon la grille (pas une réservation à prix commercial)
+    if (prev && ch.periodCost === undefined) {
+      const wasGrid = Math.abs((prev.periodCost||0) - billedCost(prev, rates)) < 0.05 || !(prev.periodCost > 0);
+      if (wasGrid) ch = { ...ch, periodCost: billedCost({ ...prev, ...ch }, rates) };
+    }
     setAssignments(p => p.map(a => a.id===id ? { ...a, ...ch } : a));
     try { await supaFetch("assignments", "PATCH", asgToRow({id,...ch}), "id=eq."+id); } catch(e) {}
   };
@@ -2670,9 +2697,9 @@ function ReplacementSpace({ user, onLogout, onRefresh, assignments, addCpRequest
               const monthStr = hYear+"-"+String(hMonth+1).padStart(2,"0");
               const monthA   = myA.filter(a=>a.date.startsWith(monthStr));
               const planned  = calcHours(monthA);
-              // Heures CP posées ce mois → à déduire du contrat
+              // Congés sans solde du mois → à déduire du contrat (les congés payés comptent déjà comme des heures)
               const hJour    = dailyHours(collab ? contractAt(collab, monthStr, myEx).weeklyHours : myEx.weeklyHours);
-              const cpPosesMois = monthA.filter(a=>a.typeId==="cp"||a.typeId==="css").length;
+              const cpPosesMois = monthA.filter(a=>a.typeId==="css").length;
               const heuresCPMois = cpPosesMois * hJour;
               const cont     = Math.max(0, (collab?contractAt(collab, monthStr, myEx).contract:0) - heuresCPMois);
               const diff     = planned-cont;
@@ -2681,7 +2708,7 @@ function ReplacementSpace({ user, onLogout, onRefresh, assignments, addCpRequest
                 <div style={{ padding:"0 16px" }}>
                   {cpPosesMois > 0 && (
                     <div style={{ background:"#F0FDF4", borderRadius:10, padding:"10px 14px", marginBottom:10, display:"flex", justifyContent:"space-between" }}>
-                      <span style={{ fontSize:12, color:"#2E8B57" }}>Absences ce mois : {cpPosesMois}j ({heuresCPMois}h deduits)</span>
+                      <span style={{ fontSize:12, color:"#2E8B57" }}>Absences ce mois : {cpPosesMois}j sans solde ({heuresCPMois}h deduits)</span>
                       <span style={{ fontSize:12, fontWeight:700, color:"#2E8B57" }}>Contrat ajuste : {cont}h</span>
                     </div>
                   )}
@@ -3731,9 +3758,9 @@ function HoursView({ assignments, collabExtras }) {
         const contract= ctrH.contract;
         const colabA  = filteredA.filter(a => a.collaboratorId===c.id);
         const planned = calcHours(colabA);
-        // Déduire les jours CP et CSS du contrat de référence
+        // Déduire les congés sans solde du contrat de référence (les congés payés comptent déjà comme des heures)
         const hJour   = dailyHours(ctrH.weeklyHours);
-        const absJours= colabA.filter(a => a.typeId==="cp"||a.typeId==="css").length;
+        const absJours= colabA.filter(a => a.typeId==="css").length;
         const absH    = absJours * hJour;
         const ref     = mode==="week"
           ? Math.max(0, Math.round(contract/4.33) - absH)
@@ -3756,7 +3783,7 @@ function HoursView({ assignments, collabExtras }) {
               </div>
               {absJours>0 && (
                 <div style={{ fontSize:10, color:"#8B5CF6", marginBottom:2 }}>
-                  {absJours}j abs. ({absH}h deduits du contrat)
+                  {absJours}j sans solde ({absH}h deduits du contrat)
                 </div>
               )}
               <div style={{ fontSize:11, marginTop:3, color: diff>0?"#C0392B":diff<0?"#2E8B57":"#6B7280" }}>
@@ -4157,7 +4184,7 @@ function AssignmentModal({ modal, onClose, addAssignment, updateAssignment, dele
           <div>
             <FormLabel text="Heures" />
             <div style={{ fontSize:10, color:"#9CA3AF", marginBottom:4 }}>
-              Comptent dans les heures de travail, sans CA · base contractuelle : {defaultHours}h/jour
+              {typeId==="formation" ? "Comptent dans les heures de travail, sans CA" : "Absence payée : compte dans les heures et est facturée"} · base contractuelle : {defaultHours}h/jour
             </div>
             <input type="number" style={S.input} value={hours} min={1} max={24} onChange={e => setHours(+e.target.value)} />
           </div>

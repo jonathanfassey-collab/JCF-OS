@@ -1626,6 +1626,7 @@ const MIN_PASSWORD = 10;
 
 // Récapitulatif admin des récupérations : un compteur par collaborateur (même calcul que la carte « Récupération »)
 function RecupRecap({ assignments, collabExtras }) {
+  const [open, setOpen] = useState(false); // replié par défaut pour ne pas alourdir l'onglet
   const r1 = x => Math.round(x * 10) / 10;
   const rows = COLLABORATORS.filter(c => !ASSOCIATES.includes(c.id)).map(c => {
     const ex = (collabExtras || {})[c.id] || {};
@@ -1650,10 +1651,19 @@ function RecupRecap({ assignments, collabExtras }) {
   }).filter(Boolean).sort((x, y) => y.reste - x.reste);
   if (!rows.length) return null;
   const cell = { padding:"6px 4px", borderBottom:"1px solid #F0F0F0", fontVariantNumeric:"tabular-nums", textAlign:"right" };
+  const totalReste = rows.reduce((s, r) => s + Math.max(0, r.reste), 0);
   return (
-    <div>
-      <SectionTitle title="Recuperations" sub={rows.length + " collaborateurs"} />
-      <div style={{ background:"#ffffff", borderRadius:12, padding:"8px 10px", boxShadow:"0 1px 4px rgba(30,47,79,.06)", overflowX:"auto", marginBottom:16 }}>
+    <div style={{ marginTop:12, marginBottom:16 }}>
+      <button onClick={() => setOpen(o => !o)}
+        style={{ width:"100%", display:"flex", alignItems:"center", justifyContent:"space-between", border:"none", borderRadius:12, padding:"12px 14px", cursor:"pointer",
+          background:"#ffffff", boxShadow:"0 1px 4px rgba(30,47,79,.06)", textAlign:"left" }}>
+        <span>
+          <span style={{ fontWeight:700, fontSize:13, color:"#1E2F4F" }}>Recuperations</span>
+          <span style={{ fontSize:11, color:"#6B7280" }}> · {rows.length} collaborateur{rows.length > 1 ? "s" : ""} · {r1(totalReste)}h a poser</span>
+        </span>
+        <span style={{ fontSize:14, color:"#6B7280", transform: open ? "rotate(180deg)" : "none", transition:"transform .15s" }}>&#9662;</span>
+      </button>
+      {open && <div style={{ background:"#ffffff", borderRadius:12, padding:"8px 10px", boxShadow:"0 1px 4px rgba(30,47,79,.06)", overflowX:"auto", marginTop:6 }}>
         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
           <thead>
             <tr style={{ color:"#9CA3AF" }}>
@@ -1679,7 +1689,7 @@ function RecupRecap({ assignments, collabExtras }) {
           </tbody>
         </table>
         <div style={{ fontSize:9, color:"#9CA3AF", marginTop:6 }}>Reste à poser = solde déclaré + fériés tombés sur un repos − récups posées − récups à venir. Sans solde déclaré, le compteur part du 1er janvier.</div>
-      </div>
+      </div>}
     </div>
   );
 }

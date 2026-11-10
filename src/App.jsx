@@ -621,6 +621,12 @@ function gridHourlyRate(cId, ds, rates) {
   if (!r || !r.month || !r.weeklyHours) return 0;
   return r.month / (r.weeklyHours * 52 / 12);
 }
+// Heures récupérées un jour de récup : celles notées sur la journée, sinon une journée type
+function recupHoursOf(a) {
+  if ((a.hours || 0) > 0) return a.hours;
+  const c = COLLABORATORS.find(x => x.id === a.collaboratorId);
+  return dailyHours(c ? contractAt(c, (a.date || "").slice(0, 7)).weeklyHours : 40);
+}
 // Coût facturé d'une journée : travail = taux × heures ; congés payés, fériés, maladie = taux × journée type ; sinon 0
 function billedCost(a, rates) {
   const rate = gridHourlyRate(a.collaboratorId, a.date, rates);
@@ -713,6 +719,9 @@ export default function App() {
           cpHours:      Number(r.cp_balance_hours) || 0,
           cpBalanceDate: r.cp_balance_date || "",
           hoursOpening: r.hours_opening || {},
+          recupHours:   r.recup_balance_hours != null ? Number(r.recup_balance_hours) : null,
+          recupDate:    r.recup_balance_date || "",
+          recupNote:    r.recup_note || "",
         };
       });
       return next;
@@ -2762,7 +2771,9 @@ function ReplacementSpace({ user, onLogout, onRefresh, assignments, addCpRequest
               cpHours={myEx.cpHours||0}
               assignments={assignments}
               contractDate={myEx.contractDate}
+              cpDate={myEx.cpBalanceDate}
             />
+            <RecupSoldeCard collabId={user.collaboratorId||""} hours={myEx.recupHours} date={myEx.recupDate} note={myEx.recupNote} assignments={assignments} />
             <button style={{ ...S.btnGold, width:"100%", marginBottom:8 }} onClick={() => setCpModal(true)}>
               Demander des conges payes
             </button>
@@ -3340,8 +3351,9 @@ function AnnualHoursCard({ c, myA, ex }) {
     }
     contract -= monthA.filter(a => a.typeId === "css").length * dailyHours(ctr.weeklyHours);
     contract = Math.max(0, contract);
-    const planned = calcHours(monthA);
-    rows.push({ ym, m, planned, contract, diff: planned - contract, past: ym <= curYm });
+    const recupH = monthA.filter(a => a.typeId === "recup").reduce((s, a) => s + recupHoursOf(a), 0);
+    const planned = calcHours(monthA) + recupH;
+    rows.push({ ym, m, planned, contract, recupH, diff: planned - contract, past: ym <= curYm });
   }
   // Report de l'année précédente (ex. heures sup à récupérer), saisi dans la fiche RH
   const opening = ((ex && ex.hoursOpening) || {})[String(year)] || null;
@@ -3395,7 +3407,7 @@ function AnnualHoursCard({ c, myA, ex }) {
               <div key={r.ym + "u"} style={{ color:color(r.cumul), fontWeight:700 }}>{fmt(r.cumul)}</div>,
             ])}
           </div>
-          <div style={{ fontSize:9, color:"#9CA3AF", marginTop:6 }}>Mois en gris : à venir (planning prévisionnel). Congés payés, fériés et maladie comptent comme des heures ; les congés sans solde réduisent le contrat.</div>
+          <div style={{ fontSize:9, color:"#9CA3AF", marginTop:6 }}>Mois en gris : à venir (planning prévisionnel). Congés payés, fériés, maladie et récupérations comptent comme des heures (les récups sont déduites du compteur de récupération){sum(rows, "recupH") > 0 ? ", dont " + r1(sum(rows, "recupH")) + "h de récup cette année" : ""} ; les congés sans solde réduisent le contrat.</div>
         </div>
       )}
     </div>
@@ -3593,8 +3605,10 @@ function CollaboratorDetail({ c, assignments, onBack, setModal, collabExtras, up
               cpHours={ex.cpHours}
               assignments={assignments}
               contractDate={ex.contractDate}
+              cpDate={ex.cpBalanceDate}
             />
           )}
+          <RecupSoldeCard collabId={c.id} hours={ex.recupHours} date={ex.recupDate} note={ex.recupNote} assignments={assignments} />
           {ex.contractDate && (
             <div style={{ fontSize:11, color:"#6B7280", marginBottom:8 }}>
               CDI depuis le {ex.contractDate}
@@ -4211,11 +4225,11 @@ function AssignmentModal({ modal, onClose, addAssignment, updateAssignment, dele
   const save = () => {
     if (!collabId) return;
     if (isEdit) {
-      const entry = { collaboratorId:collabId, date, locationId:locId||typeId, typeId, hours: withHours?hours:0 };
+      const entry = { collaboratorId:collabId, date, locationId:locId||typeId, typeId, hours: (withHours || typeId==="recup")?hours:0 };
       updateAssignment(a.id, entry);
     } else {
       datesToCreate.forEach(ds => {
-        addAssignment({ collaboratorId:collabId, date:ds, locationId:locId||typeId, typeId, hours: withHours?hours:0 });
+        addAssignment({ collaboratorId:collabId, date:ds, locationId:locId||typeId, typeId, hours: (withHours || typeId==="recup")?hours:0 });
       });
     }
     onClose();
@@ -4268,6 +4282,13 @@ function AssignmentModal({ modal, onClose, addAssignment, updateAssignment, dele
           <option value="work">Travail</option>
           {ABSENCE_TYPES.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
+        {typeId === "recup" && (
+          <div>
+            <FormLabel text="Heures recuperees" />
+            <div style={{ fontSize:10, color:"#9CA3AF", marginBottom:4 }}>Deduites du compteur de recuperation, non facturees · journee type : {defaultHours}h</div>
+            <input type="number" style={S.input} value={hours} min={0.5} max={24} step={0.5} onChange={e => setHours(+e.target.value)} />
+          </div>
+        )}
         {!isWork && withHours && (
           <div>
             <FormLabel text="Heures" />
@@ -6262,14 +6283,16 @@ function ColAvatar({ c, size=36, textColor, bgAlpha }) {
 // MODULE CP — Congés Payés Luxembourg
 // ════════════════════════════════════════════════════════════
 
-function calcCPSolde(collabId, cpHours, assignments) {
+function calcCPSolde(collabId, cpHours, assignments, cpDate) {
   const y = new Date().getFullYear();
+  // Le solde du bulletin est arrêté à cpDate : seuls les congés posés après cette date le diminuent
   const cpPoses = (assignments||[]).filter(a =>
     a.collaboratorId === collabId && a.typeId === "cp" &&
-    (a.date.startsWith(String(y)) ||
-     a.date.startsWith(String(y+1)+"-01") ||
-     a.date.startsWith(String(y+1)+"-02") ||
-     a.date.startsWith(String(y+1)+"-03"))
+    (cpDate ? a.date > cpDate :
+     (a.date.startsWith(String(y)) ||
+      a.date.startsWith(String(y+1)+"-01") ||
+      a.date.startsWith(String(y+1)+"-02") ||
+      a.date.startsWith(String(y+1)+"-03")))
   );
   const jours = cpPoses.length;
   // Heures posées = nombre de jours × heures journalières du collaborateur
@@ -6289,16 +6312,16 @@ function alerteCP(solde, contractDate) {
   return null;
 }
 
-function CPSoldeCard({ collabId, cpHours, assignments, contractDate }) {
+function CPSoldeCard({ collabId, cpHours, assignments, contractDate, cpDate }) {
   if (!cpHours || cpHours === 0) return null;
-  const s = calcCPSolde(collabId, cpHours, assignments);
+  const s = calcCPSolde(collabId, cpHours, assignments, cpDate);
   const alerte = alerteCP(s.solde, contractDate);
   const pct = s.joursTotal > 0 ? Math.round((s.jours / s.joursTotal) * 100) : 0;
   return (
     <div style={{ background:"#ffffff", borderRadius:12, padding:"14px", marginBottom:8, boxShadow:"0 1px 4px rgba(30,47,79,.06)" }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
         <div style={{ fontSize:12, fontWeight:700, color:"#1E2F4F", textTransform:"uppercase", letterSpacing:"0.5px" }}>Conges Payes</div>
-        <div style={{ fontSize:11, color:"#6B7280" }}>Droit annuel : {s.joursTotal}j ({s.total}h)</div>
+        <div style={{ fontSize:11, color:"#6B7280" }}>{cpDate ? "Solde bulletin au "+fmtDateFR(cpDate)+" : "+s.total+"h" : "Droit annuel : "+s.joursTotal+"j ("+s.total+"h)"}</div>
       </div>
       <div style={{ height:8, background:"#F0F0F0", borderRadius:4, marginBottom:8, overflow:"hidden" }}>
         <div style={{ height:"100%", width:pct+"%", background:pct>80?"#C0392B":pct>50?"#F59E0B":"#2E8B57", borderRadius:4 }} />
@@ -6324,6 +6347,41 @@ function CPSoldeCard({ collabId, cpHours, assignments, contractDate }) {
         </div>
       )}
       {contractDate && <div style={{ fontSize:11, color:"#6B7280", marginTop:8 }}>CDI depuis le {contractDate}</div>}
+    </div>
+  );
+}
+
+// Compteur de récupération : solde arrêté à une date (fiche RH), diminué des récups posées depuis
+function RecupSoldeCard({ collabId, hours, date, note, assignments }) {
+  if (hours == null) return null;
+  const poses = (assignments || []).filter(a => a.collaboratorId === collabId && a.typeId === "recup" && (!date || a.date > date))
+    .sort((x, y) => x.date.localeCompare(y.date));
+  const pris = poses.reduce((s, a) => s + recupHoursOf(a), 0);
+  const reste = Math.round((hours - pris) * 100) / 100;
+  const c = COLLABORATORS.find(x => x.id === collabId);
+  const hj = dailyHours(c ? contractAt(c, TODAY.slice(0, 7)).weeklyHours : 40);
+  return (
+    <div style={{ background:"#ffffff", borderRadius:12, padding:"14px", marginBottom:8, boxShadow:"0 1px 4px rgba(30,47,79,.06)" }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+        <div style={{ fontSize:12, fontWeight:700, color:"#1E2F4F", textTransform:"uppercase", letterSpacing:"0.5px" }}>Recuperation (heures sup)</div>
+        <div style={{ fontSize:11, color:"#6B7280" }}>{date ? "Solde au " + fmtDateFR(date) + " : " + hours + "h" : hours + "h"}</div>
+      </div>
+      <div style={{ display:"flex", justifyContent:"space-between" }}>
+        <div style={{ textAlign:"center" }}>
+          <div style={{ fontSize:18, fontWeight:800, color: reste > 0 ? "#2E8B57" : "#C0392B" }}>{reste}h</div>
+          <div style={{ fontSize:10, color:"#6B7280" }}>Solde restant (~{Math.round(reste / hj * 10) / 10} j)</div>
+        </div>
+        <div style={{ textAlign:"center" }}>
+          <div style={{ fontSize:18, fontWeight:800, color:"#1E2F4F" }}>{Math.round(pris * 100) / 100}h</div>
+          <div style={{ fontSize:10, color:"#6B7280" }}>Posees depuis</div>
+        </div>
+      </div>
+      {poses.length > 0 && (
+        <div style={{ fontSize:10, color:"#6B7280", marginTop:8 }}>
+          {poses.map(a => fmtDateFR(a.date) + " (" + recupHoursOf(a) + "h)").join(" · ")}
+        </div>
+      )}
+      {note && <div style={{ fontSize:10, color:"#9CA3AF", marginTop:6 }}>{note}</div>}
     </div>
   );
 }

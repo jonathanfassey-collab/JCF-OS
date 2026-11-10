@@ -712,6 +712,7 @@ export default function App() {
           contractDate: r.seniority_date || "",
           cpHours:      Number(r.cp_balance_hours) || 0,
           cpBalanceDate: r.cp_balance_date || "",
+          hoursOpening: r.hours_opening || {},
         };
       });
       return next;
@@ -3342,11 +3343,14 @@ function AnnualHoursCard({ c, myA, ex }) {
     const planned = calcHours(monthA);
     rows.push({ ym, m, planned, contract, diff: planned - contract, past: ym <= curYm });
   }
-  let run = 0;
+  // Report de l'année précédente (ex. heures sup à récupérer), saisi dans la fiche RH
+  const opening = ((ex && ex.hoursOpening) || {})[String(year)] || null;
+  const open = opening ? Number(opening.hours) || 0 : 0;
+  let run = open;
   rows.forEach(r => { run += r.diff; r.cumul = run; });
   const sum = (list, k) => list.reduce((s, r) => s + r[k], 0);
   const toDate = rows.filter(r => r.past);
-  const dDate = sum(toDate, "diff"), dYear = sum(rows, "diff");
+  const dDate = open + sum(toDate, "diff"), dYear = open + sum(rows, "diff");
   const color = x => (x > 0.05 ? "#C0392B" : x < -0.05 ? "#2563EB" : "#2E8B57");
   return (
     <div style={{ background:"#ffffff", borderRadius:12, margin:"0 16px 12px", padding:"12px 14px", boxShadow:"0 1px 4px rgba(30,47,79,.06)" }}>
@@ -3360,12 +3364,17 @@ function AnnualHoursCard({ c, myA, ex }) {
       </div>
       {!rows.length ? <div style={{ fontSize:12, color:"#9CA3AF" }}>Aucune journée planifiée cette année.</div> : (
         <div>
+          {opening && (
+            <div style={{ fontSize:11, color:"#1E2F4F", background:"#EFF6FF", borderRadius:8, padding:"6px 8px", marginBottom:6 }}>
+              Report {year - 1} : <strong>{fmt(open)}</strong>{opening.note ? " · " + opening.note : ""}
+            </div>
+          )}
           <div style={{ fontSize:10, color:"#9CA3AF", marginBottom:4 }}>
             {toDate.length ? "À fin " + MONTH_NAMES[toDate[toDate.length - 1].m - 1].toLowerCase() : "Aucun mois écoulé"}
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6, marginBottom:8 }}>
             {[["Planifiées", r1(sum(toDate, "planned")) + "h", "#1E2F4F"], ["Contrat", r1(sum(toDate, "contract")) + "h", "#6B7280"],
-              [dDate > 0.05 ? "Heures sup" : dDate < -0.05 ? "Heures manquantes" : "Équilibré", fmt(dDate), color(dDate)]].map(([l, v, col]) => (
+              [(dDate > 0.05 ? "Heures sup" : dDate < -0.05 ? "Heures manquantes" : "Équilibré") + (opening ? " (report inclus)" : ""), fmt(dDate), color(dDate)]].map(([l, v, col]) => (
               <div key={l} style={{ background:"#F8F9FB", borderRadius:8, padding:"8px 6px", textAlign:"center" }}>
                 <div style={{ fontWeight:800, fontSize:15, color:col, fontVariantNumeric:"tabular-nums" }}>{v}</div>
                 <div style={{ fontSize:10, color:"#6B7280" }}>{l}</div>
@@ -3373,7 +3382,7 @@ function AnnualHoursCard({ c, myA, ex }) {
             ))}
           </div>
           <div style={{ fontSize:11, color:"#6B7280", marginBottom:8 }}>
-            Projection fin {year} : {r1(sum(rows, "planned"))}h planifiées pour {r1(sum(rows, "contract"))}h de contrat,{" "}
+            Projection fin {year} : {r1(sum(rows, "planned"))}h planifiées pour {r1(sum(rows, "contract"))}h de contrat{opening ? ", report inclus" : ""},{" "}
             <span style={{ fontWeight:700, color:color(dYear) }}>{fmt(dYear)}</span>
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1.2fr 1fr 1fr 1fr 1fr", fontSize:11, rowGap:3, fontVariantNumeric:"tabular-nums" }}>

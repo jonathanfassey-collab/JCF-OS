@@ -2333,6 +2333,12 @@ function ReservationModal({ collab, locationId, assignments, onClose, onConfirm,
 // ════════════════════════════════════════════════════════════
 // CALENDRIER MENSUEL MAGASIN
 // ════════════════════════════════════════════════════════════
+// 151.5 → « 151,5 h » ; 152 → « 152 h »
+function fmtHours(h) {
+  const r = Math.round((h||0) * 100) / 100;
+  return String(r).replace(".", ",") + " h";
+}
+
 function StoreCalendar({ myReservations, rates, onClickEntry }) {
   const [calYear,  setCalYear]  = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
@@ -2341,15 +2347,23 @@ function StoreCalendar({ myReservations, rates, onClickEntry }) {
   const monthStr = calYear + "-" + String(calMonth+1).padStart(2,"0");
   const monthRes = myReservations.filter(a => a.date.startsWith(monthStr) && (filter==="all" || a.collaboratorId===filter));
 
+  // Résumé du mois : toute l'équipe (« Tous ») ou la personne sélectionnée.
   const stats = useMemo(() => {
-    const all = myReservations.filter(a => a.date.startsWith(monthStr));
+    const all = myReservations.filter(a => a.date.startsWith(monthStr) && (filter==="all" || a.collaboratorId===filter));
     return {
       days:    all.length,
-      hours:   all.reduce((s,a) => s+a.hours, 0),
+      hours:   Math.round(all.reduce((s,a) => s+(a.hours||0), 0) * 100) / 100,
       budget:  Math.round(all.reduce((s,a) => s+budgetAssignment(a,rates), 0)),
       collabs: new Set(all.map(a => a.collaboratorId)).size,
     };
-  }, [myReservations, monthStr, rates]);
+  }, [myReservations, monthStr, rates, filter]);
+  // Heures du mois par personne (affichées sur les boutons de filtre)
+  const hoursByCollab = useMemo(() => {
+    const m = {};
+    myReservations.filter(a => a.date.startsWith(monthStr)).forEach(a => { m[a.collaboratorId] = (m[a.collaboratorId]||0) + (a.hours||0); });
+    return m;
+  }, [myReservations, monthStr]);
+  const selectedCollab = filter==="all" ? null : COLLABORATORS.find(c => c.id===filter);
 
   const firstDay   = new Date(calYear, calMonth, 1);
   const lastDay    = new Date(calYear, calMonth+1, 0);
@@ -2383,12 +2397,18 @@ function StoreCalendar({ myReservations, rates, onClickEntry }) {
     <div>
       {/* KPI */}
       <div style={{ display:"flex", gap:6, padding:"10px 16px 6px", overflowX:"auto" }}>
-        {[
+        {(selectedCollab ? [
+          { v:selectedCollab.name.split(" ")[0], l:"Personne", c:selectedCollab.color },
           { v:stats.days,       l:"Jours",    c:"#1E2F4F" },
-          { v:stats.hours+"h",  l:"Heures",   c:"#2D456B" },
+          { v:fmtHours(stats.hours), l:"Heures ce mois", c:"#2D456B" },
+          ...(selectedCollab.contract ? [{ v:selectedCollab.contract+" h", l:"Contrat / mois", c:"#2E8B57" }] : []),
+          { v:fmtEur(stats.budget), l:"Budget estim.", c:"#D4AF37" },
+        ] : [
+          { v:stats.days,       l:"Jours",    c:"#1E2F4F" },
+          { v:fmtHours(stats.hours), l:"Heures",   c:"#2D456B" },
           { v:String(stats.collabs), l:"Collabs", c:"#2E8B57" },
           { v:fmtEur(stats.budget), l:"Budget estim.", c:"#D4AF37" },
-        ].filter(k => !(HIDE_PRICES && k.l==="Budget estim.")).map((k, i) => (
+        ]).filter(k => !(HIDE_PRICES && k.l==="Budget estim.")).map((k, i) => (
           <div key={i} style={{ flex:"0 0 auto", minWidth:74, background:"#ffffff", borderRadius:12, padding:"10px 8px", textAlign:"center", boxShadow:"0 1px 4px rgba(30,47,79,.07)", borderTop:"3px solid "+k.c }}>
             <div style={{ fontSize:13, fontWeight:800, color:k.c, fontVariantNumeric:"tabular-nums", whiteSpace:"nowrap" }}>{k.v}</div>
             <div style={{ fontSize:9, color:"#6B7280", marginTop:2 }}>{k.l}</div>
@@ -2410,9 +2430,14 @@ function StoreCalendar({ myReservations, rates, onClickEntry }) {
           <button onClick={() => setFilter("all")} style={{ ...S.btn, padding:"4px 10px", fontSize:10, flexShrink:0, background: filter==="all" ? "#1E2F4F" : "#F8F9FB", color: filter==="all" ? "#fff" : "#2C2C2C" }}>Tous</button>
           {usedCollabs.map(c => (
             <button key={c.id} onClick={() => setFilter(filter===c.id ? "all" : c.id)} style={{ ...S.btn, padding:"4px 10px", fontSize:10, flexShrink:0, background: filter===c.id ? c.color : "#F8F9FB", color: filter===c.id ? "#fff" : "#2C2C2C" }}>
-              {c.name.split(" ")[0]}
+              {c.name.split(" ")[0]} · {fmtHours(hoursByCollab[c.id]||0)}
             </button>
           ))}
+        </div>
+      )}
+      {selectedCollab && (
+        <div style={{ padding:"0 16px 6px", fontSize:10, color:"#6B7280" }}>
+          Heures posées dans ce magasin uniquement. Recliquez sur le prénom (ou « Tous ») pour revenir à l'équipe.
         </div>
       )}
 

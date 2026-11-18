@@ -10,8 +10,8 @@
 -- Principe :
 --   • chaque affectation créée par une demande porte sa provenance
 --     (source_kind = 'leave' | 'mad', source_id = id de la demande) ;
---   • anti-doublon UNIQUEMENT par (provenance, date) : deux demi-journées
---     indépendantes le même jour restent possibles ;
+--   • anti-doublon UNIQUEMENT par (provenance, date) : deux affectations
+--     indépendantes le même jour restent possibles (validé le 18/11/2026) ;
 --   • validation = une transaction : tout ou rien, rejouable sans doublon ;
 --   • suppression d'une MAD = suppression de SES affectations seulement.
 --
@@ -30,8 +30,8 @@ create unique index if not exists assignments_provenance_uniq
   where source_kind is not null;
 
 -- ── Validation d'une demande CP / CSS ──────────────────────────────────────
--- DÉCISION MÉTIER À CONFIRMER : peut-on valider une demande déjà refusée ?
--- Ce brouillon l'autorise (pending ou refused → approved).
+-- Règle validée par Jonathan le 18/11/2026 : seule une demande « pending » peut
+-- être validée. Une demande refusée ne se revalide pas : le salarié en refait une.
 create or replace function public.jcf_validate_leave(p_request_id text)
 returns text
 language plpgsql
@@ -53,6 +53,9 @@ begin
   end if;
   if r.status = 'approved' then
     return 'deja_validee';                       -- idempotent : double clic sans effet
+  end if;
+  if r.status is distinct from 'pending' then
+    raise exception 'Demande % : le salarié doit refaire une demande', r.status using errcode = '22023';
   end if;
 
   foreach d in array r.dates::text[] loop

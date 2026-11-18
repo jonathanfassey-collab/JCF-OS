@@ -2512,7 +2512,7 @@ function ReservationDetail({ assignment, rates, onClose, onCancel, onCancelLate 
         {isLate && !confirmCancel && assignment.typeId !== "annulation" && (
           <div style={{ background:"#FEF2F2", border:"1px solid #FECACA", borderRadius:10, padding:"12px 14px", marginBottom:12 }}>
             <div style={{ fontWeight:700, fontSize:13, color:"#C0392B", marginBottom:4 }}>
-              Annulation tardive — moins de 24h
+              Annulation tardive — moins de 48 h avant la journée
             </div>
             <div style={{ fontSize:12, color:"#C0392B", marginBottom:8 }}>
               Une penalite de 30% sera automatiquement facturee{HIDE_PRICES ? "." : " : " + fmtEur(penalite)}

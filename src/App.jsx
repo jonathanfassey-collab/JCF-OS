@@ -2451,6 +2451,9 @@ function StoreCalendar({ myReservations, rates, onClickEntry }) {
   );
 }
 
+// Délai d'annulation sans frais pour les magasins (règle validée par Jonathan le 18/11/2026)
+const LATE_CANCEL_HOURS = 48;
+
 function ReservationDetail({ assignment, rates, onClose, onCancel, onCancelLate }) {
   // useState EN PREMIER — règle des hooks React
   const [confirmCancel, setConfirmCancel] = useState(false);
@@ -2462,10 +2465,13 @@ function ReservationDetail({ assignment, rates, onClose, onCancel, onCancelLate 
   const btl = (COMMERCIAL_TYPES.find(ct => ct.id===assignment.bookingType)||{}).label || "Journee";
   const budget = budgetAssignment(assignment, rates);
 
-  // Vérification annulation tardive (moins de 24h)
+  // Annulation sans frais jusqu'à 48 h avant le début de la journée (minuit).
+  // En deçà, et pour une journée passée : annulation tardive, pénalité de 30 %.
+  // (Avant : moins de 24 h seulement, et une journée passée depuis plus de 24 h s'annulait sans frais.)
   const now = new Date();
-  const diffH = (d - now) / (1000 * 60 * 60);
-  const isLate = diffH < 24 && diffH > -24;
+  const dayStart = new Date(assignment.date + "T00:00:00");
+  const diffH = (dayStart - now) / (1000 * 60 * 60);
+  const isLate = diffH < LATE_CANCEL_HOURS;
   const penalite = Math.round(estCollab(assignment.collaboratorId, assignment.hours, ratesForDate(rates, assignment.date)) * 0.30);
 
   return (
@@ -2773,9 +2779,10 @@ function StoreSpace({ user, onLogout, onRefresh, assignments, addAssignment, del
           rates={rates}
           onClose={() => setDetail(null)}
           onCancel={id => { deleteAssignment(id); setDetail(null); }}
-          onCancelLate={(a, penalite) => {
-            // Transformer en annulation tardive avec pénalité 30%
-            addAssignment({
+          onCancelLate={async (a, penalite) => {
+            // Transformer en annulation tardive avec pénalité 30 % : la pénalité est
+            // enregistrée d'abord, la journée n'est retirée que si cela a réussi.
+            const ok = await addAssignment({
               collaboratorId: a.collaboratorId,
               date: a.date,
               locationId: a.locationId,
@@ -2786,7 +2793,7 @@ function StoreSpace({ user, onLogout, onRefresh, assignments, addAssignment, del
               hotelCost: 0, repasCost: 0,
               penalite: penalite,
             });
-            deleteAssignment(a.id);
+            if (ok) await deleteAssignment(a.id);
             setDetail(null);
           }}
         />

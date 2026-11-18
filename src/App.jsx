@@ -1,6 +1,9 @@
 import React from "react";
 import { useState, useMemo, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { asgToRow, asgToPatch, rowToAsg, madToRow, madToPatch, rowToMad, cpToRow, rowToCp, withGridCost, normalizeChange } from "./lib/rows.js";
+import { SupaError, interpret, reportWriteError, onWriteError, userMessage } from "./lib/supaError.js";
+import { ymd, parseYmd, todayYmd, monthBounds, buildDateRange, calcEndDate, periodDates } from "./lib/dates.js";
 
 
 // ─── Supabase ────────────────────────────────────────────────────────────────
@@ -55,9 +58,12 @@ async function adminUsers(payload) {
   return data;
 }
 
-async function supaFetch(table, method, body, filters, extraHeaders) {
+// Appel REST Supabase. Lève une SupaError en cas d'échec (jamais de null silencieux).
+// PATCH / DELETE : une réponse vide (aucune ligne touchée) est un échec, sauf allowEmpty.
+async function supaFetch(table, method, body, filters, extraHeaders, opts) {
   const url = SUPA_URL + "/rest/v1/" + table + (filters ? "?" + filters : "");
   const token = await getAccessToken();
+  const m = method || "GET";
   const headers = {
     "apikey": SUPA_KEY,
     "Authorization": "Bearer " + token,
@@ -65,15 +71,13 @@ async function supaFetch(table, method, body, filters, extraHeaders) {
     "Prefer": "return=representation",
     ...(extraHeaders || {}),
   };
-  const res = await fetch(url, {
-    method: method || "GET",
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (!res.ok) { console.error("Supabase error", res.status, await res.text()); return null; }
-  if (method === "DELETE" || method === "PATCH") return true;
-  const text = await res.text();
-  return text ? JSON.parse(text) : [];
+  let res;
+  try {
+    res = await fetch(url, { method: m, headers, body: body ? JSON.stringify(body) : undefined });
+  } catch (e) {
+    throw new SupaError("network", "Réseau indisponible");
+  }
+  return interpret(res, m, !(opts && opts.allowEmpty));
 }
 // Le serveur renvoie au plus 1000 lignes par requête : on lit par pages jusqu'à la fin.
 // Le tri doit être stable (ajouter id) pour ne sauter ni doubler aucune ligne.
@@ -87,21 +91,6 @@ async function supaFetchAll(table, method, body, filters) {
     if (page.length < PAGE_SIZE) return all;
   }
 }
-function asgToRow(a) {
-  return { id:a.id, collaborator_id:a.collaboratorId, date:a.date, location_id:a.locationId, type_id:a.typeId, hours:a.hours||0, booking_type:a.bookingType||"day", period_cost:a.periodCost||0, hotel_nights:a.hotelNights||0, hotel_cost:a.hotelCost||0, repas_soirs:a.repasSoirs||0, repas_cost:a.repasCost||0, ouverture:a.ouverture||false, ouverture_cost:a.ouvertureCost||0, penalite:a.penalite||0 };
-}
-function rowToAsg(r) {
-  return { id:r.id, collaboratorId:r.collaborator_id, date:r.date, locationId:r.location_id, typeId:r.type_id, hours:Number(r.hours)||0, bookingType:r.booking_type||"day", periodCost:Number(r.period_cost)||0, hotelNights:Number(r.hotel_nights)||0, hotelCost:Number(r.hotel_cost)||0, repasSoirs:Number(r.repas_soirs)||0, repasCost:Number(r.repas_cost)||0, ouverture:r.ouverture||false, ouvertureCost:Number(r.ouverture_cost)||0, penalite:Number(r.penalite)||0 };
-}
-function madToRow(m) {
-  return { id:m.id, partner_id:m.partnerId, collaborator_id:m.collaboratorId, booking_type:m.bookingType, start_date:m.startDate, end_date:m.endDate, blocked_hours:m.blockedHours||0, extra_hours:m.extraHours||0, collab_cost:m.collabCost||0, hotel_nights:m.hotelNights||0, hotel_cost:m.hotelCost||0, repas_soirs:m.repasSoirs||0, repas_cost:m.repasCost||0, ouverture_cost:m.ouvertureCost||0, cost:m.cost||0, status:m.status||"confirmed", comment:m.comment||"" };
-}
-function rowToMad(r) {
-  return { id:r.id, partnerId:r.partner_id, collaboratorId:r.collaborator_id, bookingType:r.booking_type, startDate:r.start_date, endDate:r.end_date, blockedHours:Number(r.blocked_hours)||0, extraHours:Number(r.extra_hours)||0, collabCost:Number(r.collab_cost)||0, hotelNights:Number(r.hotel_nights)||0, hotelCost:Number(r.hotel_cost)||0, repasSoirs:Number(r.repas_soirs)||0, repasCost:Number(r.repas_cost)||0, ouvertureCost:Number(r.ouverture_cost)||0, cost:Number(r.cost)||0, status:r.status||"confirmed", comment:r.comment||"" };
-}
-function cpToRow(r) { return { id:r.id, collaborator_id:r.collaboratorId, dates:r.dates, comment:r.comment||"", status:r.status, type:r.type||"cp" }; }
-function rowToCp(r) { return { id:r.id, collaboratorId:r.collaborator_id, dates:r.dates||[], comment:r.comment||"", status:r.status, type:r.type||"cp" }; }
-
 // ─── Palette JCF officielle ──────────────────────────────────────────────────
 // Navy   : #1E2F4F   Or     : #D4AF37   Fond   : #F8F9FB
 // Navy2  : #2D456B   OrL    : #E7C766   Carte  : #FFFFFF
@@ -455,12 +444,12 @@ const ACCOUNT_DIRECTORY = [
   { name:"Aurore F",    role:"replacement", login:"aurore@jcf.lu", collaboratorId:"c21" },
 ];
 
-const TODAY = new Date().toISOString().split("T")[0];
+const TODAY = todayYmd();
 function getWeekDays(mondayStr) {
   const days = [];
   const d = new Date(mondayStr + "T12:00:00");
   for (let i=0;i<7;i++) {
-    const ds = d.toISOString().split("T")[0];
+    const ds = ymd(d);
     days.push({ date:ds, label: ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"][d.getDay()] + " " + d.getDate() });
     d.setDate(d.getDate()+1);
   }
@@ -471,7 +460,7 @@ function getCurrentMonday() {
   const day = d.getDay();
   const diff = d.getDate() - day + (day===0 ? -6 : 1);
   d.setDate(diff);
-  return d.toISOString().split("T")[0];
+  return ymd(d);
 }
 const WEEK_DAYS = getWeekDays(getCurrentMonday());
 const DAY_NAMES   = ["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];
@@ -525,32 +514,6 @@ function fmtDateFR(ds) {
 function newId() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) return "ax-" + crypto.randomUUID();
   return "ax-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
-}
-
-function buildDateRange(s, e) {
-  const dates = []; const c = new Date(s + "T12:00:00"); const end = new Date(e + "T12:00:00");
-  let safety = 0;
-  while (c <= end && safety < 500) {
-    safety++;
-    const dow = c.getDay();
-    if (dow !== 0 && dow !== 6) dates.push(c.toISOString().split("T")[0]);
-    c.setDate(c.getDate()+1);
-  }
-  return dates;
-}
-function calcEndDate(s, t) {
-  if (t === "day") return s;
-  // Semaine = 5 jours ouvres (lun-ven), Quinzaine = 10 jours ouvres, Mois = 22 jours ouvres
-  const tgt = { week:5, fortnight:10, month:22 }[t] || 5;
-  const c = new Date(s + "T12:00:00"); let n = 0;
-  let safety = 0;
-  while (safety < 500) {
-    safety++;
-    const dow = c.getDay();
-    if (dow !== 0 && dow !== 6) { n++; if (n >= tgt) return c.toISOString().split("T")[0]; }
-    c.setDate(c.getDate()+1);
-  }
-  return s; // fallback
 }
 
 function calcTotalRate(rt, days, cId, rates) {
@@ -709,6 +672,30 @@ function effectiveCollab(c, collabExtras) {
   };
 }
 
+// Bandeau d'erreurs : chargement échoué et écritures refusées par le serveur.
+function WriteNotices({ loadError, onReload, errors, onDismiss }) {
+  if (!loadError && errors.length === 0) return null;
+  const box = { background:"#C0392B", color:"#fff", borderRadius:10, padding:"10px 12px", fontSize:13, boxShadow:"0 4px 16px rgba(0,0,0,.25)", display:"flex", gap:10, alignItems:"center" };
+  const btn = { background:"rgba(255,255,255,.18)", color:"#fff", border:"1px solid rgba(255,255,255,.5)", borderRadius:6, padding:"4px 10px", fontSize:12, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" };
+  return (
+    <div role="alert" style={{ position:"fixed", left:12, right:12, bottom:12, zIndex:9999, display:"flex", flexDirection:"column", gap:8, maxWidth:560, margin:"0 auto" }}>
+      {loadError && (
+        <div style={{ ...box, background:"#8a5a00" }}>
+          <span style={{ flex:1 }}>{loadError}</span>
+          <button style={btn} onClick={onReload}>Recharger</button>
+        </div>
+      )}
+      {errors.map(e => (
+        <div key={e.id} style={box}>
+          <span style={{ flex:1 }}>{e.message}</span>
+          {e.retry && <button style={btn} onClick={() => { onDismiss(e.id); e.retry(); }}>Réessayer</button>}
+          <button style={btn} aria-label="Fermer" onClick={() => onDismiss(e.id)}>✕</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ════════════════════════════════════════════════════════════
 // APP ROOT
 // ════════════════════════════════════════════════════════════
@@ -716,6 +703,12 @@ export default function App() {
   const [user, setUser]               = useState(null);
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [writeErrors, setWriteErrors] = useState([]);   // notifications d'écriture refusée
+  useEffect(() => onWriteError(({ message, retry }) => {
+    const id = Date.now() + Math.random();
+    setWriteErrors(p => [...p.slice(-2), { id, message, retry }]);
+  }), []);
 
   // Données chargées selon le rôle (les règles RLS filtrent côté base) :
   //  admin       → tout
@@ -768,7 +761,12 @@ export default function App() {
           if (Array.isArray(balRows)) setStoreRecupBal(balRows);
         }
       }
-    } catch(e) { console.error("Supabase load error:", e); }
+      setLoadError("");
+    } catch(e) {
+      // Échec de chargement ≠ résultat vide : on garde les données déjà affichées et on prévient.
+      console.error("Supabase load error:", e && e.kind, e && e.status);
+      setLoadError(userMessage(e).replace(" Rien n'a été enregistré.", "").replace(" : rien n'a été enregistré.", ".") + " Les données affichées peuvent être incomplètes ou anciennes.");
+    }
     finally { if (showLoading) setLoading(false); }
   };
 
@@ -830,11 +828,28 @@ export default function App() {
   const [partners,     setPartners]     = useState(INITIAL_PARTNERS);
   // Mises a disposition (Ch.4)
   const [mads, setMads] = useState(INITIAL_MADS);
+
+  // ── Écritures serveur ──────────────────────────────────────────────────────
+  // Chaque écriture met d'abord l'écran à jour (affichage immédiat), puis attend
+  // la confirmation du serveur. En cas d'échec (réseau, session expirée, droits,
+  // erreur serveur, aucune ligne modifiée) : l'écran revient à l'état précédent,
+  // une notification s'affiche avec « Réessayer », et la fonction renvoie false.
+  const pendingOps = React.useRef(new Set());   // anti double clic sur les validations
+  const runWrite = async (doWrite, rollback, retry) => {
+    try { await doWrite(); return true; }
+    catch (e) { if (rollback) rollback(); reportWriteError(e, retry); return false; }
+  };
+  const pick = (obj, keys) => { const o = {}; keys.forEach(k => { o[k] = obj ? obj[k] : undefined; }); return o; };
+
   const addMad = async (m) => {
     const entry = { ...m, id:"JCF-MAD-"+String(Date.now()).slice(-6) };
     setMads(p => [...p, entry]);
-    try { await supaFetch("mads", "POST", madToRow(entry)); } catch(e) {}
-    // Créer les assignments dans le planning
+    const ok = await runWrite(
+      () => supaFetch("mads", "POST", madToRow(entry)),
+      () => setMads(p => p.filter(x => x.id !== entry.id)),
+      () => addMad(m));
+    if (!ok) return false;
+    // Créer les assignments dans le planning (arrêt au premier échec, déjà notifié)
     if (entry.startDate && entry.endDate && entry.collaboratorId) {
       const partner = INITIAL_PARTNERS.find(p => p.id === entry.partnerId);
       const locMatch = [...STORES, ...MISSIONS].find(l => partner && l.name === partner.name);
@@ -842,7 +857,7 @@ export default function App() {
       const dates = buildDateRange(entry.startDate, entry.endDate);
       const hoursPerDay = (dates.length > 0 && entry.blockedHours) ? Math.round(entry.blockedHours / dates.length) : 8;
       for (let idx = 0; idx < dates.length; idx++) {
-        await addAssignment({
+        const done = await addAssignment({
           collaboratorId: entry.collaboratorId,
           date: dates[idx],
           locationId: locId,
@@ -856,79 +871,111 @@ export default function App() {
           repasCost: idx===0 ? (entry.repasCost||0) : 0,
           ouvertureCost: 0,
         });
+        if (!done) return false;
       }
     }
+    return true;
   };
-  const updateMad = async (id, ch) => {
+  // Accepte updateMad(id, {champ:valeur}) et updateMad(id, "champ", valeur).
+  // Seuls les champs modifiés partent au serveur (coûts, statut, dates préservés).
+  const updateMad = async (id, chOrField, value) => {
+    const ch = normalizeChange(chOrField, value);
+    const prev = mads.find(m => m.id === id);
     setMads(p => p.map(m => m.id===id ? { ...m, ...ch } : m));
-    try { await supaFetch("mads", "PATCH", madToRow({id,...ch}), "id=eq."+id); } catch(e) {}
+    return runWrite(
+      () => supaFetch("mads", "PATCH", madToPatch(ch), "id=eq."+encodeURIComponent(id)),
+      () => setMads(p => p.map(m => m.id===id ? { ...m, ...pick(prev, Object.keys(ch)) } : m)),
+      () => updateMad(id, ch));
   };
   const deleteMad = async (mad) => {
     setMads(p => p.filter(m => m.id !== mad.id));
-    try { await supaFetch("mads", "DELETE", null, "id=eq."+mad.id); } catch(e) {}
+    const ok = await runWrite(
+      () => supaFetch("mads", "DELETE", null, "id=eq."+encodeURIComponent(mad.id)),
+      () => setMads(p => p.some(m => m.id === mad.id) ? p : [...p, mad]),
+      () => deleteMad(mad));
+    if (!ok) return false;
+    // ⚠ Sans identifiant de provenance, on retire les journées de travail de la période.
+    // Correction complète (lien affectation → MAD) prévue dans le lot D03.
     if (mad.startDate && mad.endDate && mad.collaboratorId) {
       const dates = buildDateRange(mad.startDate, mad.endDate);
       const toDelete = assignments.filter(a => a.collaboratorId===mad.collaboratorId && dates.includes(a.date) && isWorkType(a.typeId));
-      for (const a of toDelete) await deleteAssignment(a.id);
+      for (const a of toDelete) { if (!(await deleteAssignment(a.id))) return false; }
     }
-  };
-  const [cpRequests, setCpRequests] = useState([]);
-  const addCpRequest = async (req) => {
-    const entry = { ...req, id:"cp-"+Date.now() };
-    setCpRequests(p => [...p, entry]);
-    try { await supaFetch("cp_requests", "POST", cpToRow(entry)); } catch(e) {}
-  };
-  const validateCpRequest = async (id) => {
-    const req = cpRequests.find(r => r.id===id); if (!req) return;
-    for (const ds of req.dates) await addAssignment({ collaboratorId:req.collaboratorId, date:ds, locationId:"cp", typeId:"cp", hours:8 });
-    setCpRequests(p => p.map(r => r.id===id ? { ...r, status:"approved" } : r));
-    try { await supaFetch("cp_requests", "PATCH", { status:"approved" }, "id=eq."+id); } catch(e) {}
-  };
-  const refuseCpRequest = async (id) => {
-    setCpRequests(p => p.map(r => r.id===id ? { ...r, status:"refused" } : r));
-    try { await supaFetch("cp_requests", "PATCH", { status:"refused" }, "id=eq."+id); } catch(e) {}
+    return true;
   };
 
+  // Demandes CP / CSS : même logique pour les deux types
+  const [cpRequests, setCpRequests] = useState([]);
   const [cssRequests, setCssRequests] = useState([]);
+  const addLeaveRequest = async (entry, setList) => {
+    setList(p => [...p, entry]);
+    return runWrite(
+      () => supaFetch("cp_requests", "POST", cpToRow(entry)),
+      () => setList(p => p.filter(r => r.id !== entry.id)),
+      () => addLeaveRequest(entry, setList));
+  };
+  const setLeaveStatus = async (id, status, prevStatus, setList) => {
+    setList(p => p.map(r => r.id===id ? { ...r, status } : r));
+    return runWrite(
+      () => supaFetch("cp_requests", "PATCH", { status }, "id=eq."+encodeURIComponent(id)),
+      () => setList(p => p.map(r => r.id===id ? { ...r, status:prevStatus } : r)),
+      () => setLeaveStatus(id, status, prevStatus, setList));
+  };
+  // Validation : crée les journées puis passe la demande en « approved ».
+  // Le statut n'est changé que si toutes les journées sont enregistrées.
+  // (Opération serveur transactionnelle et idempotente : lot D03.)
+  const validateLeave = async (req, kind, setList) => {
+    if (!req || req.status === "approved") return false;
+    const key = "validate:" + req.id;
+    if (pendingOps.current.has(key)) return false;
+    pendingOps.current.add(key);
+    try {
+      for (const ds of req.dates) {
+        const already = assignments.some(a => a.collaboratorId===req.collaboratorId && a.date===ds && a.typeId===kind);
+        if (already) continue;   // reprise après un échec partiel : pas de doublon
+        if (!(await addAssignment({ collaboratorId:req.collaboratorId, date:ds, locationId:kind, typeId:kind, hours:8 }))) return false;
+      }
+      return await setLeaveStatus(req.id, "approved", req.status, setList);
+    } finally { pendingOps.current.delete(key); }
+  };
+  const addCpRequest      = (req) => addLeaveRequest({ ...req, id:"cp-"+Date.now() }, setCpRequests);
+  const validateCpRequest = (id)  => validateLeave(cpRequests.find(r => r.id===id), "cp", setCpRequests);
+  const refuseCpRequest   = (id)  => { const r = cpRequests.find(x => x.id===id); return setLeaveStatus(id, "refused", r && r.status, setCpRequests); };
+
   const [charges, setCharges] = useState([]);
   const [storeStaff, setStoreStaff]       = useState([]);
   const [storeRecupBal, setStoreRecupBal] = useState([]);
-  const addCssRequest = async (req) => {
-    const entry = { ...req, id:"css-"+Date.now(), type:"css" };
-    setCssRequests(p => [...p, entry]);
-    try { await supaFetch("cp_requests", "POST", cpToRow(entry)); } catch(e) {}
-  };
-  const validateCssRequest = async (id) => {
-    const req = cssRequests.find(r => r.id===id); if (!req) return;
-    for (const ds of req.dates) await addAssignment({ collaboratorId:req.collaboratorId, date:ds, locationId:"css", typeId:"css", hours:8 });
-    setCssRequests(p => p.map(r => r.id===id ? { ...r, status:"approved" } : r));
-    try { await supaFetch("cp_requests", "PATCH", { status:"approved" }, "id=eq."+id); } catch(e) {}
-  };
-  const refuseCssRequest = async (id) => {
-    setCssRequests(p => p.map(r => r.id===id ? { ...r, status:"refused" } : r));
-    try { await supaFetch("cp_requests", "PATCH", { status:"refused" }, "id=eq."+id); } catch(e) {}
-  };
+  const addCssRequest      = (req) => addLeaveRequest({ ...req, id:"css-"+Date.now(), type:"css" }, setCssRequests);
+  const validateCssRequest = (id)  => validateLeave(cssRequests.find(r => r.id===id), "css", setCssRequests);
+  const refuseCssRequest   = (id)  => { const r = cssRequests.find(x => x.id===id); return setLeaveStatus(id, "refused", r && r.status, setCssRequests); };
 
   const addAssignment = async (a) => {
     const entry = { ...a, id: newId() };
     // Saisie admin : coût calculé avec la grille. Les réservations magasin fixent déjà leur prix (periodCost).
     if (entry.periodCost === undefined) entry.periodCost = billedCost(entry, rates);
     setAssignments(p => [...p, entry]);
-    try { await supaFetch("assignments", "POST", asgToRow(entry)); } catch(e) {}
+    return runWrite(
+      () => supaFetch("assignments", "POST", asgToRow(entry)),
+      () => setAssignments(p => p.filter(x => x.id !== entry.id)),
+      () => addAssignment(a));
   };
-  const updateAssignment = async (id, ch) => {
+  const updateAssignment = async (id, change) => {
     const prev = assignments.find(a => a.id===id);
     // Recalcul du coût si la journée était tarifée selon la grille (pas une réservation à prix commercial)
-    if (prev && ch.periodCost === undefined) {
-      const wasGrid = Math.abs((prev.periodCost||0) - billedCost(prev, rates)) < 0.05 || !(prev.periodCost > 0);
-      if (wasGrid) ch = { ...ch, periodCost: billedCost({ ...prev, ...ch }, rates) };
-    }
+    const ch = withGridCost(prev, change, x => billedCost(x, rates));
     setAssignments(p => p.map(a => a.id===id ? { ...a, ...ch } : a));
-    try { await supaFetch("assignments", "PATCH", asgToRow({id,...ch}), "id=eq."+id); } catch(e) {}
+    return runWrite(
+      () => supaFetch("assignments", "PATCH", asgToPatch(ch), "id=eq."+encodeURIComponent(id)),
+      () => setAssignments(p => p.map(a => a.id===id ? { ...a, ...pick(prev, Object.keys(ch)) } : a)),
+      () => updateAssignment(id, change));
   };
   const deleteAssignment = async (id) => {
+    const prev = assignments.find(a => a.id===id);
     setAssignments(p => p.filter(a => a.id !== id));
-    try { await supaFetch("assignments", "DELETE", null, "id=eq."+id); } catch(e) {}
+    return runWrite(
+      () => supaFetch("assignments", "DELETE", null, "id=eq."+encodeURIComponent(id)),
+      () => prev && setAssignments(p => p.some(a => a.id === id) ? p : [...p, prev].sort((x,y) => x.date.localeCompare(y.date))),
+      () => deleteAssignment(id));
   };
   const updateRate       = (cId, field, val) => setRates(p => ({ ...p, [cId]: { ...p[cId], [field]: parseFloat(val)||0 } }));
 
@@ -936,12 +983,16 @@ export default function App() {
   // weeklyHours modifie → recalcul proportionnel des tarifs
   const HR_COLUMNS = { jobCategory:"job_title", contractDate:"seniority_date", cpHours:"cp_balance_hours" };
   const updateCollabExtra = (cId, field, val) => {
+    const prevVal = (collabExtras[cId] || {})[field];
     setCollabExtras(p => ({ ...p, [cId]: { ...p[cId], [field]: val } }));
     // Les champs RH sont enregistrés en base (admin uniquement)
     if (HR_COLUMNS[field]) {
       const v = field === "cpHours" ? (parseFloat(val) || 0) : (val || null);
-      supaFetch("collaborator_hr", "POST", { collaborator_id:cId, [HR_COLUMNS[field]]:v, updated_at:new Date().toISOString() },
-        "on_conflict=collaborator_id", { "Prefer":"resolution=merge-duplicates,return=representation" });
+      runWrite(
+        () => supaFetch("collaborator_hr", "POST", { collaborator_id:cId, [HR_COLUMNS[field]]:v, updated_at:new Date().toISOString() },
+          "on_conflict=collaborator_id", { "Prefer":"resolution=merge-duplicates,return=representation" }),
+        () => setCollabExtras(p => ({ ...p, [cId]: { ...p[cId], [field]: prevVal } })),
+        () => updateCollabExtra(cId, field, val));
     }
     if (field === "weeklyHours") {
       const newW = parseInt(val) || 0;
@@ -1005,10 +1056,16 @@ export default function App() {
   const props = { assignments, addAssignment, updateAssignment, deleteAssignment, rates, collabExtras, updateCollabExtra, partners, updatePartner, mads, addMad, updateMad, deleteMad, dynCollaborators, addCollaborator };
 
   HIDE_PRICES = !canSeePrices(user);
-  if (user.role === "admin")       return (<AdminSpace       user={user} onLogout={logout} {...props} charges={charges} updateRate={updateRate} cpRequests={cpRequests} validateCpRequest={validateCpRequest} refuseCpRequest={refuseCpRequest} cssRequests={cssRequests} validateCssRequest={validateCssRequest} refuseCssRequest={refuseCssRequest} onRefresh={refreshData} />);
-  if (user.role === "store")       return (<StoreSpace       user={user} onLogout={logout} {...props} onRefresh={refreshData} staffRows={storeStaff} recupBalances={storeRecupBal} />);
-  if (user.role === "replacement") return (<ReplacementSpace user={user} onLogout={logout} {...props} addCpRequest={addCpRequest} cpRequests={cpRequests} addCssRequest={addCssRequest} cssRequests={cssRequests} onRefresh={refreshData} />);
-  return null;
+  let space = null;
+  if (user.role === "admin")       space = (<AdminSpace       user={user} onLogout={logout} {...props} charges={charges} updateRate={updateRate} cpRequests={cpRequests} validateCpRequest={validateCpRequest} refuseCpRequest={refuseCpRequest} cssRequests={cssRequests} validateCssRequest={validateCssRequest} refuseCssRequest={refuseCssRequest} onRefresh={refreshData} />);
+  else if (user.role === "store")  space = (<StoreSpace       user={user} onLogout={logout} {...props} onRefresh={refreshData} staffRows={storeStaff} recupBalances={storeRecupBal} />);
+  else if (user.role === "replacement") space = (<ReplacementSpace user={user} onLogout={logout} {...props} addCpRequest={addCpRequest} cpRequests={cpRequests} addCssRequest={addCssRequest} cssRequests={cssRequests} onRefresh={refreshData} />);
+  if (!space) return null;
+  return (<>
+    {space}
+    <WriteNotices loadError={loadError} onReload={refreshData} errors={writeErrors}
+      onDismiss={id => setWriteErrors(p => p.filter(x => x.id !== id))} />
+  </>);
 }
 
 // ════════════════════════════════════════════════════════════
@@ -1643,7 +1700,7 @@ function RecupRecap({ assignments, collabExtras }) {
     if (!declared && !acquis && !passees && !aVenir) return null;
     // Magasin principal : lieu le plus fréquent de ses journées de travail sur ±60 jours
     const lo = new Date(); lo.setDate(lo.getDate() - 60); const hi = new Date(); hi.setDate(hi.getDate() + 60);
-    const near = mine.filter(a => isWorkType(a.typeId) && a.date >= lo.toISOString().slice(0, 10) && a.date <= hi.toISOString().slice(0, 10));
+    const near = mine.filter(a => isWorkType(a.typeId) && a.date >= ymd(lo) && a.date <= ymd(hi));
     const count = {}; near.forEach(a => { count[a.locationId] = (count[a.locationId] || 0) + 1; });
     const main = Object.keys(count).sort((x, y) => count[y] - count[x])[0];
     return { c, store: main ? getLocName(main) : "—", base, since: declared ? ex.recupDate : "", acquis, passees, aVenir, reste,
@@ -1705,8 +1762,10 @@ function AccountsView({ user, dynCollaborators, collabExtras }) {
 
   const reload = async () => {
     setLoadingP(true); setLoadErr("");
-    const rows = await supaFetch("profiles", "GET", null, "order=login.asc");
-    if (Array.isArray(rows)) setProfiles(rows); else setLoadErr("Impossible de charger les comptes.");
+    try {
+      const rows = await supaFetch("profiles", "GET", null, "order=login.asc");
+      if (Array.isArray(rows)) setProfiles(rows); else setLoadErr("Impossible de charger les comptes.");
+    } catch (e) { setLoadErr("Impossible de charger les comptes. " + userMessage(e).split(".")[0] + "."); }
     setLoadingP(false);
   };
   useEffect(() => { reload(); }, []);
@@ -1961,14 +2020,7 @@ function ReservationModal({ collab, locationId, assignments, onClose, onConfirm,
   const locName = (ALL_LOCATIONS.find(l => l.id===locationId) || {}).name || locationId;
 
   const candidateDates = useMemo(() => {
-    if (resType==="day") return [startDate];
-    if (resType==="week") { const e=calcEndDate(startDate,"week"); return buildDateRange(startDate,e); }
-    if (resType==="fortnight") { const e=calcEndDate(startDate,"fortnight"); return buildDateRange(startDate,e); }
-    if (resType==="month") {
-      const parts = monthStr.split("-"); const y=parseInt(parts[0]); const m=parseInt(parts[1]);
-      return buildDateRange(new Date(y,m-1,1).toISOString().split("T")[0], new Date(y,m,0).toISOString().split("T")[0], inclSat);
-    }
-    return [];
+    return periodDates(resType, startDate, monthStr, inclSat);
   }, [resType, startDate, inclSat, monthStr]);
 
   const conflictDates  = useMemo(() => candidateDates.filter(ds => assignments.some(a => a.collaboratorId===collab.id && a.date===ds && isWorkType(a.typeId))), [candidateDates, assignments, collab.id]);
@@ -2521,8 +2573,9 @@ function StoreRecupTab({ user, staffIds, staffRows, balances, addAssignment, del
         setMsg("Ce jour n'est pas une journée de travail dans votre magasin (" + getLocName(existing.locationId || existing.typeId) + ") : contactez JCF pour le modifier.");
         return;
       }
-      if (existing) await deleteAssignment(existing.id);
-      await addAssignment({ collaboratorId:collabId, date, locationId:"recup", typeId:"recup", hours: hours || hj });
+      // Récup enregistrée d'abord : si la suite échoue, la journée de travail n'est jamais perdue.
+      if (!(await addAssignment({ collaboratorId:collabId, date, locationId:"recup", typeId:"recup", hours: hours || hj }))) return;
+      if (existing && !(await deleteAssignment(existing.id))) { setMsg("Récup posée, mais la journée de travail n'a pas pu être retirée : contactez JCF."); onRefresh && onRefresh(); return; }
       setMsg("Récup posée : " + (collab ? collab.name : "") + ", " + fmtDateFR(date) + " (" + (hours || hj) + "h).");
       onRefresh && onRefresh();
     } finally { setBusy(false); }
@@ -2763,7 +2816,7 @@ function ReplacementSpace({ user, onLogout, onRefresh, assignments, addCpRequest
   const myA    = assignments.filter(a => a.collaboratorId===user.collaboratorId);
 
   const weekDates = Array.from({ length:7 }, (_, i) => {
-    const d = new Date(weekStart+"T12:00:00"); d.setDate(d.getDate()+i); return d.toISOString().split("T")[0];
+    const d = new Date(weekStart+"T12:00:00"); d.setDate(d.getDate()+i); return ymd(d);
   });
 
   const [cpModal,  setCpModal]  = useState(false);
@@ -2825,8 +2878,8 @@ function ReplacementSpace({ user, onLogout, onRefresh, assignments, addCpRequest
             {planView==="week" && (
               <div>
                 <WeekNav weekDates={weekDates}
-                  onPrev={() => { const ws=new Date(weekStart+"T12:00:00"); ws.setDate(ws.getDate()-7); setWeekStart(ws.toISOString().split('T')[0]); }}
-                  onNext={() => { const ws=new Date(weekStart+"T12:00:00"); ws.setDate(ws.getDate()+7); setWeekStart(ws.toISOString().split('T')[0]); }}
+                  onPrev={() => { const ws=new Date(weekStart+"T12:00:00"); ws.setDate(ws.getDate()-7); setWeekStart(ymd(ws)); }}
+                  onNext={() => { const ws=new Date(weekStart+"T12:00:00"); ws.setDate(ws.getDate()+7); setWeekStart(ymd(ws)); }}
                 />
                 <div style={{ display:"flex", flexDirection:"column", gap:6, padding:"0 16px" }}>
                   {weekDates.map(ds => {
@@ -2959,9 +3012,9 @@ function ReplacementSpace({ user, onLogout, onRefresh, assignments, addCpRequest
                     let cur=new Date(first);
                     cur.setDate(cur.getDate()-((cur.getDay()+6)%7));
                     while(cur<=last){
-                      const ws=cur.toISOString().split("T")[0];
+                      const ws=ymd(cur);
                       const we=new Date(cur);we.setDate(cur.getDate()+6);
-                      const wed=we.toISOString().split("T")[0];
+                      const wed=ymd(we);
                       const wH=calcHours(myA.filter(a=>a.date>=ws&&a.date<=wed));
                       weeks.push({ws,we:wed,wH});
                       cur=new Date(cur);cur.setDate(cur.getDate()+7);
@@ -3120,7 +3173,7 @@ function AdminDashboard({ assignments, setModal, rates }) {
   const noA    = COLLABORATORS.filter(c => !todayA.find(a => a.collaboratorId===c.id));
   const entToday = [...new Set(active.filter(a => isMission(a.locationId)).map(a => a.locationId))];
   const caToday  = active.reduce((s,a) => s+estCollab(a.collaboratorId,a.hours,ratesForDate(rates,a.date)), 0);
-  const _mon = getCurrentMonday(); const _sun = (() => { const d=new Date(_mon+"T12:00:00"); d.setDate(d.getDate()+6); return d.toISOString().split("T")[0]; })();
+  const _mon = getCurrentMonday(); const _sun = (() => { const d=new Date(_mon+"T12:00:00"); d.setDate(d.getDate()+6); return ymd(d); })();
   const caWeek   = assignments.filter(a => a.date>=_mon && a.date<=_sun && isWorkType(a.typeId)).reduce((s,a) => s+estCollab(a.collaboratorId,a.hours,ratesForDate(rates,a.date)), 0);
   const mGroups  = groupMissions(todayA);
   // Heures sup : heures planifiées du mois en cours comparées au contrat mensuel
@@ -3259,7 +3312,7 @@ function PlanningView({ assignments, setModal }) {
   const [tlMonth,   setTlMonth]   = useState(new Date().getMonth());
 
   const weekDates = Array.from({ length:7 }, (_, i) => {
-    const d = new Date(weekStart+"T12:00:00"); d.setDate(d.getDate()+i); return d.toISOString().split("T")[0];
+    const d = new Date(weekStart+"T12:00:00"); d.setDate(d.getDate()+i); return ymd(d);
   });
 
   // Calendrier mensuel
@@ -3295,8 +3348,8 @@ function PlanningView({ assignments, setModal }) {
       {viewMode==="week" && (
         <div>
           <WeekNav weekDates={weekDates}
-            onPrev={() => { const ws=new Date(weekStart+"T12:00:00"); ws.setDate(ws.getDate()-7); setWeekStart(ws.toISOString().split('T')[0]); }}
-            onNext={() => { const ws=new Date(weekStart+"T12:00:00"); ws.setDate(ws.getDate()+7); setWeekStart(ws.toISOString().split('T')[0]); }}
+            onPrev={() => { const ws=new Date(weekStart+"T12:00:00"); ws.setDate(ws.getDate()-7); setWeekStart(ymd(ws)); }}
+            onNext={() => { const ws=new Date(weekStart+"T12:00:00"); ws.setDate(ws.getDate()+7); setWeekStart(ymd(ws)); }}
           />
           <div style={S.dayTabs}>
             {weekDates.map(ds => {
@@ -3371,7 +3424,7 @@ function PlanningView({ assignments, setModal }) {
               const absent = assignments.filter(a=>a.date===ds&&!isWorkType(a.typeId));
               return (
                 <div key={i}
-                  onClick={()=>{setSelDate(ds);setViewMode("week");const d=new Date(ds+"T12:00:00");d.setDate(d.getDate()-((d.getDay()+6)%7));setWeekStart(d.toISOString().split("T")[0]);}}
+                  onClick={()=>{setSelDate(ds);setViewMode("week");const d=new Date(ds+"T12:00:00");d.setDate(d.getDate()-((d.getDay()+6)%7));setWeekStart(ymd(d));}}
                   style={{ minHeight:44, borderRadius:6, background:isToday?"#FFFBEB":isSelected?"#EFF6FF":"#ffffff",
                     border:"1px solid "+(isToday?"#D4AF37":isSelected?"#BFDBFE":"#F8F9FB"),
                     padding:"3px", cursor:"pointer" }}>
@@ -3511,7 +3564,7 @@ function CollaboratorsView({ assignments, setModal, jobCategories, skills, secto
       <div style={S.cardList}>
         {filtered.map(c => {
           const ex      = collabExtras[c.id] || {};
-          const moisEnCours = new Date().toISOString().slice(0, 7);
+          const moisEnCours = todayYmd().slice(0, 7);
           const planned = calcHours(assignments.filter(a => a.collaboratorId===c.id && a.date.startsWith(moisEnCours)));
           const ctr     = contractAt(c, moisEnCours).contract;
           const pct     = Math.min(100, Math.round((planned/ctr)*100));
@@ -3862,12 +3915,12 @@ function CollaboratorDetail({ c, assignments, onBack, setModal, collabExtras, up
           {planView==="week" && (
             <div>
               <WeekNav
-                weekDates={Array.from({length:7},(_,i)=>{const d=new Date(planWeek+"T12:00:00");d.setDate(d.getDate()+i);return d.toISOString().split("T")[0];})}
-                onPrev={()=>{const d=new Date(planWeek+'T12:00:00');d.setDate(d.getDate()-7);setPlanWeek(d.toISOString().split('T')[0]);}}
-                onNext={()=>{const d=new Date(planWeek+'T12:00:00');d.setDate(d.getDate()+7);setPlanWeek(d.toISOString().split('T')[0]);}}
+                weekDates={Array.from({length:7},(_,i)=>{const d=new Date(planWeek+"T12:00:00");d.setDate(d.getDate()+i);return ymd(d);})}
+                onPrev={()=>{const d=new Date(planWeek+'T12:00:00');d.setDate(d.getDate()-7);setPlanWeek(ymd(d));}}
+                onNext={()=>{const d=new Date(planWeek+'T12:00:00');d.setDate(d.getDate()+7);setPlanWeek(ymd(d));}}
               />
               <div style={S.cardList}>
-                {Array.from({length:7},(_,i)=>{const d=new Date(planWeek+"T12:00:00");d.setDate(d.getDate()+i);return d.toISOString().split("T")[0];}).map(ds=>{
+                {Array.from({length:7},(_,i)=>{const d=new Date(planWeek+"T12:00:00");d.setDate(d.getDate()+i);return ymd(d);}).map(ds=>{
                   const a   = myA.find(x => x.date===ds);
                   const abs = a && !isWorkType(a.typeId) ? absStyle(a.typeId) : null;
                   const d   = new Date(ds+"T12:00:00");
@@ -3966,8 +4019,8 @@ function CollaboratorDetail({ c, assignments, onBack, setModal, collabExtras, up
                   const weeks=[]; const first=new Date(hYear,hMonth,1); const last=new Date(hYear,hMonth+1,0);
                   let cur=new Date(first); cur.setDate(cur.getDate()-((cur.getDay()+6)%7));
                   while(cur<=last){
-                    const ws=cur.toISOString().split("T")[0];
-                    const we=new Date(cur);we.setDate(cur.getDate()+6);const wed=we.toISOString().split("T")[0];
+                    const ws=ymd(cur);
+                    const we=new Date(cur);we.setDate(cur.getDate()+6);const wed=ymd(we);
                     const wA=myA.filter(a=>a.date>=ws&&a.date<=wed);
                     const wH=calcHours(wA);
                     weeks.push({ws,we:wed,wH});
@@ -4032,7 +4085,7 @@ function HoursView({ assignments, collabExtras }) {
   const [calMonth,  setCalMonth]  = useState(new Date().getMonth());
 
   const weekDates = Array.from({length:7},(_,i)=>{
-    const d=new Date(weekStart+"T12:00:00"); d.setDate(d.getDate()+i); return d.toISOString().split("T")[0];
+    const d=new Date(weekStart+"T12:00:00"); d.setDate(d.getDate()+i); return ymd(d);
   });
   const monthStr  = calYear+"-"+String(calMonth+1).padStart(2,"0");
   const prevMonth = ()=>{ if(calMonth===0){setCalYear(y=>y-1);setCalMonth(11);}else setCalMonth(m=>m-1);};
@@ -4060,8 +4113,8 @@ function HoursView({ assignments, collabExtras }) {
       {/* Navigation periode */}
       {mode==="week" ? (
         <WeekNav weekDates={weekDates}
-          onPrev={()=>{const d=new Date(weekStart+"T12:00:00");d.setDate(d.getDate()-7);setWeekStart(d.toISOString().split("T")[0]);}}
-          onNext={()=>{const d=new Date(weekStart+"T12:00:00");d.setDate(d.getDate()+7);setWeekStart(d.toISOString().split("T")[0]);}} />
+          onPrev={()=>{const d=new Date(weekStart+"T12:00:00");d.setDate(d.getDate()-7);setWeekStart(ymd(d));}}
+          onNext={()=>{const d=new Date(weekStart+"T12:00:00");d.setDate(d.getDate()+7);setWeekStart(ymd(d));}} />
       ) : (
         <div style={{ display:"flex", alignItems:"center", gap:8, padding:"4px 16px 6px" }}>
           <button onClick={prevMonth} style={{ ...S.btn, padding:"5px 12px", background:"#F8F9FB", color:"#1E2F4F", fontSize:16 }}>&#8249;</button>
@@ -5511,14 +5564,7 @@ function CreateMadModal({ onClose, addMad, rates, partners, assignments }) {
   // Calcul dates
   const candidateDates = useMemo(() => {
     if (!collabId) return [];
-    if (bookType==="day") return [startDate];
-    if (bookType==="week") { const e=calcEndDate(startDate,"week"); return buildDateRange(startDate,e); }
-    if (bookType==="fortnight") { const e=calcEndDate(startDate,"fortnight"); return buildDateRange(startDate,e); }
-    if (bookType==="month") {
-      const [y,m]=monthStr.split("-").map(Number);
-      return buildDateRange(new Date(y,m-1,1).toISOString().split("T")[0],new Date(y,m,0).toISOString().split("T")[0],inclSat);
-    }
-    return [];
+    return periodDates(bookType, startDate, monthStr, inclSat);
   }, [collabId, bookType, startDate, inclSat, monthStr]);
 
   const conflictDates = useMemo(() =>

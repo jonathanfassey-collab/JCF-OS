@@ -2339,7 +2339,7 @@ function fmtHours(h) {
   return String(r).replace(".", ",") + " h";
 }
 
-function StoreCalendar({ myReservations, rates, onClickEntry }) {
+function StoreCalendar({ myReservations, rates, onClickEntry, staffRows = [], locationId }) {
   const [calYear,  setCalYear]  = useState(new Date().getFullYear());
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
   const [filter,   setFilter]   = useState("all");
@@ -2357,12 +2357,26 @@ function StoreCalendar({ myReservations, rates, onClickEntry }) {
       collabs: new Set(all.map(a => a.collaboratorId)).size,
     };
   }, [myReservations, monthStr, rates, filter]);
-  // Heures du mois par personne (affichées sur les boutons de filtre)
+  // Heures du mois par personne, tous lieux confondus :
+  //  - dans ce magasin ;
+  //  - ailleurs (autre magasin, mission extérieure : le lieu reste masqué au magasin) ;
+  //  - congés payés, fériés, maladie, formation (comptent comme heures de travail).
+  // Source : planning de l'équipe (jcf_store_staff_planning) ; à défaut, les réservations du magasin.
   const hoursByCollab = useMemo(() => {
     const m = {};
-    myReservations.filter(a => a.date.startsWith(monthStr)).forEach(a => { m[a.collaboratorId] = (m[a.collaboratorId]||0) + (a.hours||0); });
+    const add = (id, k, h) => { if (!m[id]) m[id] = { store:0, elsewhere:0, absences:0, total:0 }; m[id][k] += h; m[id].total += h; };
+    const covered = new Set();
+    (staffRows || []).filter(a => a.date.startsWith(monthStr)).forEach(a => {
+      covered.add(a.collaboratorId);
+      const h = a.hours || 0;
+      if (isWorkType(a.typeId)) add(a.collaboratorId, a.locationId === locationId ? "store" : "elsewhere", h);
+      else if (countsHoursType(a.typeId)) add(a.collaboratorId, "absences", h);
+    });
+    myReservations.filter(a => a.date.startsWith(monthStr) && !covered.has(a.collaboratorId))
+      .forEach(a => add(a.collaboratorId, "store", a.hours || 0));
     return m;
-  }, [myReservations, monthStr]);
+  }, [staffRows, myReservations, monthStr, locationId]);
+  const hb = id => hoursByCollab[id] || { store:0, elsewhere:0, absences:0, total:0 };
   const selectedCollab = filter==="all" ? null : COLLABORATORS.find(c => c.id===filter);
 
   const firstDay   = new Date(calYear, calMonth, 1);
@@ -2399,13 +2413,15 @@ function StoreCalendar({ myReservations, rates, onClickEntry }) {
       <div style={{ display:"flex", gap:6, padding:"10px 16px 6px", overflowX:"auto" }}>
         {(selectedCollab ? [
           { v:selectedCollab.name.split(" ")[0], l:"Personne", c:selectedCollab.color },
-          { v:stats.days,       l:"Jours",    c:"#1E2F4F" },
-          { v:fmtHours(stats.hours), l:"Heures ce mois", c:"#2D456B" },
+          { v:fmtHours(hb(selectedCollab.id).store), l:"Ce magasin", c:"#2D456B" },
+          { v:fmtHours(hb(selectedCollab.id).elsewhere), l:"Ailleurs", c:"#B45309" },
+          ...(hb(selectedCollab.id).absences ? [{ v:fmtHours(hb(selectedCollab.id).absences), l:"Congés, fériés…", c:"#8B5CF6" }] : []),
+          { v:fmtHours(hb(selectedCollab.id).total), l:"Total du mois", c:"#1E2F4F" },
           ...(selectedCollab.contract ? [{ v:selectedCollab.contract+" h", l:"Contrat / mois", c:"#2E8B57" }] : []),
           { v:fmtEur(stats.budget), l:"Budget estim.", c:"#D4AF37" },
         ] : [
           { v:stats.days,       l:"Jours",    c:"#1E2F4F" },
-          { v:fmtHours(stats.hours), l:"Heures",   c:"#2D456B" },
+          { v:fmtHours(stats.hours), l:"Heures magasin", c:"#2D456B" },
           { v:String(stats.collabs), l:"Collabs", c:"#2E8B57" },
           { v:fmtEur(stats.budget), l:"Budget estim.", c:"#D4AF37" },
         ]).filter(k => !(HIDE_PRICES && k.l==="Budget estim.")).map((k, i) => (
@@ -2430,14 +2446,14 @@ function StoreCalendar({ myReservations, rates, onClickEntry }) {
           <button onClick={() => setFilter("all")} style={{ ...S.btn, padding:"4px 10px", fontSize:10, flexShrink:0, background: filter==="all" ? "#1E2F4F" : "#F8F9FB", color: filter==="all" ? "#fff" : "#2C2C2C" }}>Tous</button>
           {usedCollabs.map(c => (
             <button key={c.id} onClick={() => setFilter(filter===c.id ? "all" : c.id)} style={{ ...S.btn, padding:"4px 10px", fontSize:10, flexShrink:0, background: filter===c.id ? c.color : "#F8F9FB", color: filter===c.id ? "#fff" : "#2C2C2C" }}>
-              {c.name.split(" ")[0]} · {fmtHours(hoursByCollab[c.id]||0)}
+              {c.name.split(" ")[0]} · {fmtHours(hb(c.id).total)}
             </button>
           ))}
         </div>
       )}
       {selectedCollab && (
         <div style={{ padding:"0 16px 6px", fontSize:10, color:"#6B7280" }}>
-          Heures posées dans ce magasin uniquement. Recliquez sur le prénom (ou « Tous ») pour revenir à l'équipe.
+          Total = heures dans ce magasin + ailleurs (autres magasins, missions) + congés, fériés, maladie et formation. Le calendrier ne montre que les journées de ce magasin. Recliquez sur le prénom (ou « Tous ») pour revenir à l'équipe.
         </div>
       )}
 
@@ -2715,7 +2731,7 @@ function StoreSpace({ user, onLogout, onRefresh, assignments, addAssignment, del
         )}
 
         {tab==="calendar" && (
-          <StoreCalendar myReservations={myReservations} rates={rates} locationId={user.locationId} onClickEntry={a => setDetail(a)} />
+          <StoreCalendar myReservations={myReservations} rates={rates} locationId={user.locationId} staffRows={staffRows || []} onClickEntry={a => setDetail(a)} />
         )}
 
         {tab==="available" && (
